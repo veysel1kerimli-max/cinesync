@@ -1,0 +1,21 @@
+{
+  "name": "cinesync",
+  "version": "2.3.0",
+  "description": "CineSync — ortak izleme odası",
+  "scripts": {
+    "test": "node tests/url-parser.test.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "python3 -m http.server 8080"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "esbuild": "^0.28.2",
+    "hls.js": "^1.7.4",
+    "playwright-core": "^1.65.1"
+  }
+}

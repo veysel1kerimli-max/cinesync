@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>CineSync — Ortak İzleme Odası</title>
+  <meta name="description" content="Arkadaşlarınla aynı anda video izle, görüntülü konuş ve sohbet et. Kurulum ve hesap gerektirmez.">
+  <meta name="theme-color" content="#0b0f1a">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CineSync">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#basla">İçeriğe geç</a>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <!-- ===================== ANA SAYFA (LOBİ) ===================== -->
+  <div id="lobby" class="landing">
+    <header class="site-nav" id="siteNav">
+      <div class="nav-inner">
+        <a class="brand" href="#top" aria-label="CineSync ana sayfa"><span class="brand-mark" data-icon="play"></span><span>Cine<b>Sync</b></span></a>
+        <nav class="nav-links" aria-label="Bölümler">
+          <a href="#ozellikler">Özellikler</a><a href="#nasil">Nasıl çalışır</a><a href="#kaynaklar">Kaynaklar</a><a href="#sss">SSS</a>
+        </nav>
+        <div class="nav-actions">
+          <button id="installBtn" class="btn btn-ghost btn-sm" type="button" data-icon="download" hidden><span class="hide-sm">Uygulamayı yükle</span></button>
+          <a class="btn btn-primary btn-sm" href="#basla" data-cta="start">Oda kur</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- Hero -->
+      <section class="hero" aria-labelledby="heroTitle">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <span class="eyebrow"><span data-icon="shield"></span>Ücretsiz · Hesap yok · Uçtan uca şifreli</span>
+            <h1 id="heroTitle">Uzakta olsanız da<br><span class="grad">aynı koltukta izleyin.</span></h1>
+            <p class="lead">YouTube, Vimeo, MP4, canlı yayın ve ücretsiz yasal film arşivlerini odadaki herkesle saniyesi saniyesine senkron izleyin. Görüntülü konuşun, sohbet edin, tepki gönderin.</p>
+            <div class="hero-ctas">
+              <a class="btn btn-primary btn-lg-inline" href="#basla" data-cta="create" data-icon="plus">Oda oluştur</a>
+              <a class="btn btn-secondary btn-lg-inline" href="#basla" data-cta="join" data-icon="login">Odaya katıl</a>
+            </div>
+            <ul class="hero-proof" aria-label="Öne çıkanlar">
+              <li><b>0 sn</b><span>kurulum</span></li>
+              <li><b>14+</b><span>yasal ücretsiz film</span></li>
+              <li><b>17</b><span>izinli film sitesi</span></li>
+            </ul>
+          </div>
+
+          <section class="card join-card" id="basla" aria-labelledby="joinTitle">
+            <div class="join-head">
+              <h2 id="joinTitle" class="card-title">Hemen başla</h2>
+              <span class="muted tiny">30 saniyede hazır</span>
+            </div>
+            <div class="preview">
+              <video id="lobbyPreview" autoplay playsinline muted></video>
+              <div id="lobbyPreviewEmpty" class="preview-empty"><span data-icon="camOff"></span><span>Kamera kapalı — istersen aç</span></div>
+              <div class="preview-controls">
+                <button id="lobbyMic" class="round-btn" type="button" aria-label="Mikrofonu aç/kapat" data-icon="micOff"></button>
+                <button id="lobbyCam" class="round-btn" type="button" aria-label="Kamerayı aç/kapat" data-icon="camOff"></button>
+              </div>
+            </div>
+            <label class="field">
+              <span>Görünen adın</span>
+              <input id="nameInput" type="text" maxlength="24" placeholder="ör. Veysel" autocomplete="nickname" enterkeyhint="done">
+            </label>
+            <div class="field">
+              <span id="colorLabel">Profil rengin</span>
+              <div id="colorPicker" class="color-picker" role="radiogroup" aria-labelledby="colorLabel"></div>
+            </div>
+            <details class="adv" id="advRoom">
+              <summary><span data-icon="settings"></span>Özel oda kodu ve şifre <small class="muted">(isteğe bağlı)</small></summary>
+              <label class="field"><span>Özel oda kodu</span><input id="customCode" type="text" maxlength="40" placeholder="ör. film-gecesi" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done"><small class="hint" id="customCodeHint">Boş bırakırsan rastgele kod üretilir · 4–32 harf, rakam veya tire</small></label>
+              <label class="field"><span>Oda şifresi</span><input id="roomPass" type="password" maxlength="64" placeholder="Şifresiz" autocomplete="new-password" enterkeyhint="done"><small class="hint">Şifreli odada her şey bu şifreyle şifrelenir. Davet linkinde şifre yer almaz; ayrıca söyle. Katılırken de buraya yazılır.</small></label>
+            </details>
+            <button id="createBtn" class="btn btn-primary btn-lg" type="button" data-icon="plus">Yeni oda oluştur</button>
+            <div class="divider"><span>veya koduyla katıl</span></div>
+            <form id="joinForm" class="join-row">
+              <input id="codeInput" type="text" maxlength="40" placeholder="oda kodu (ör. film-gecesi)" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Oda kodu" enterkeyhint="go">
+              <button class="btn btn-secondary" type="submit" data-icon="login">Katıl</button>
+            </form>
+            <button id="rejoinBtn" class="btn btn-secondary rejoin-btn" type="button" data-icon="history" hidden><span>Son odana dön: <b id="rejoinCode"></b></span></button>
+            <div id="recentRooms" class="recent-rooms" hidden>
+              <span class="muted tiny">Son odaların</span>
+              <div class="chips" id="recentRoomList"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Özellikler -->
+      <section class="section" id="ozellikler" aria-labelledby="featTitle">
+        <div class="section-head">
+          <span class="kicker">Özellikler</span>
+          <h2 id="featTitle">Birlikte izlemek için gereken her şey</h2>
+          <p class="muted">Kurulum yok, üyelik yok. Linki paylaşın, gerisini CineSync halletsin.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature"><span class="f-ic" data-icon="sync"></span><h3>Tam senkron oynatma</h3><p>Biri oynatır, durdurur, sarar ya da hızı değiştirir; herkeste aynı anda olur. Kayma her 4 saniyede düzeltilir.</p></article>
+          <article class="feature"><span class="f-ic" data-icon="cam"></span><h3>Görüntülü sohbet</h3><p>Kamera ve mikrofonla yüz yüze izleyin. Tam ekranda kameralar köşelerde küçük kutucuk olur.</p></article>
+          <article class="feature"><span class="f-ic" data-icon="film"></span><h3>Yasal film kataloğu</h3><p>Kamu malı klasikler ve resmî ücretsiz platformlar tek tıkla odada. Korsan kaynak yok.</p></article>
+          <article class="feature"><span class="f-ic" data-icon="smile"></span><h3>Tepkiler ve sohbet</h3><p>Tam ekranda bile uçan emojiler, yanıtlanabilir mesajlar, “yazıyor…” göstergesi.</p></article>
+          <article class="feature"><span class="f-ic" data-icon="lock"></span><h3>Oda sahibi kontrolü</h3><p>İsterseniz kontrolü kilitleyin: oynat/duraklat/sar yalnızca sizde olsun.</p></article>
+          <article class="feature"><span class="f-ic" data-icon="shield"></span><h3>Uçtan uca şifreli</h3><p>Oda kodu şifreleme anahtarıdır. Sunucu yok, kayıt yok; mesajları kodu bilmeyen kimse okuyamaz.</p></article>
+        </div>
+      </section>
+
+      <!-- Nasıl çalışır -->
+      <section class="section alt" id="nasil" aria-labelledby="howTitle">
+        <div class="section-head">
+          <span class="kicker">Nasıl çalışır</span>
+          <h2 id="howTitle">Üç adımda ortak sinema</h2>
+        </div>
+        <ol class="steps">
+          <li><span class="step-n">1</span><h3>Oda oluştur</h3><p>Adını yaz, “Oda oluştur”a bas. Sana özel 6 haneli kod üretilir.</p></li>
+          <li><span class="step-n">2</span><h3>Davet et</h3><p>Davet linkini WhatsApp, Telegram ya da e-postayla gönder. Tek tıkla katılırlar.</p></li>
+          <li><span class="step-n">3</span><h3>Birlikte izle</h3><p>Link yapıştır ya da “Siteler” kataloğundan bir film seç; herkeste aynı anda başlar.</p></li>
+        </ol>
+      </section>
+
+      <!-- Desteklenen kaynaklar -->
+      <section class="section" id="kaynaklar" aria-labelledby="srcTitle">
+        <div class="section-head">
+          <span class="kicker">Desteklenen kaynaklar</span>
+          <h2 id="srcTitle">Linki yapıştır, gerisini biz çözelim</h2>
+          <p class="muted">Bağlantı türü otomatik tanınır ve en uygun oynatıcı seçilir.</p>
+        </div>
+        <div class="src-grid">
+          <div class="src-card"><h3><span class="dot ok"></span>Tam senkron</h3><div class="tags"><span>YouTube</span><span>Vimeo</span><span>MP4 / WebM</span><span>HLS (.m3u8)</span><span>Archive.org filmleri</span><span>Wikimedia videoları</span></div></div>
+          <div class="src-card"><h3><span class="dot warn"></span>Gömülü oynatıcı</h3><div class="tags"><span>Dailymotion</span><span>Twitch</span><span>Google Drive</span><span>Streamable</span><span>Spotify</span><span>SoundCloud</span></div></div>
+          <div class="src-card"><h3><span class="dot info-dot"></span>Ekran yansıtma</h3><div class="tags"><span>Gömülmeyi yasaklayan siteler</span><span>Kendi dosyaların</span><span>Herhangi bir sekme</span></div></div>
+        </div>
+        <p class="legal-note"><span data-icon="shield"></span>CineSync yalnızca yasal kaynakları listeler. Katalogdaki siteler resmî ve ücretsizdir; filmler kamu malı ya da Creative Commons lisanslıdır.</p>
+      </section>
+
+      <!-- SSS -->
+      <section class="section alt" id="sss" aria-labelledby="faqTitle">
+        <div class="section-head"><span class="kicker">SSS</span><h2 id="faqTitle">Sık sorulan sorular</h2></div>
+        <div class="faq">
+          <details><summary>Ücretli mi, üyelik gerekiyor mu?</summary><p>Hayır. CineSync tamamen ücretsizdir; hesap, e-posta ya da kurulum gerekmez. Tarayıcıdan açman yeterli.</p></details>
+          <details><summary>Netflix ya da Disney+ izleyebilir miyiz?</summary><p>Bu servisler başka sitelerin içinde açılmayı ve kopyalanmayı engeller. Kendi hesabınla açıp “Ekranı yansıt” ile odaya yansıtabilirsin; ancak servisin kullanım koşullarına uymak senin sorumluluğundadır.</p></details>
+          <details><summary>Neden yalnızca yasal siteler var?</summary><p>Korsan siteler telif hakkını ihlal eder, çoğu zararlı reklam ve yazılım barındırır. Katalogda yalnızca resmî, ücretsiz platformlar ve kamu malı/özgür lisanslı filmler bulunur.</p></details>
+          <details><summary>Kaç kişi aynı odada olabilir?</summary><p>Sohbet ve senkron için sınır yok. Görüntülü görüşme kişiden kişiye çalıştığı için 6–8 kişiye kadar en iyi sonucu verir.</p></details>
+          <details><summary>Telefonda çalışıyor mu?</summary><p>Evet. iPhone, Android, tablet ve bilgisayarda çalışır; ana ekrana uygulama olarak da eklenebilir.</p></details>
+          <details><summary>Mesajlarım bir yerde saklanıyor mu?</summary><p>Hayır. Mesajlar oda koduyla şifrelenip anlık iletilir; kalıcı olarak hiçbir yerde tutulmaz.</p></details>
+        </div>
+      </section>
+
+      <section class="cta-band" aria-labelledby="ctaTitle">
+        <h2 id="ctaTitle">Film gecesi için hazır mısın?</h2>
+        <p class="muted">Oda oluştur, linki paylaş, patlamış mısırı hazırla.</p>
+        <a class="btn btn-primary btn-lg-inline" href="#basla" data-cta="create" data-icon="plus">Ücretsiz oda oluştur</a>
+      </section>
+    </main>
+
+    <footer class="site-foot">
+      <div class="foot-inner">
+        <div class="foot-brand"><span class="brand"><span class="brand-mark" data-icon="play"></span><span>Cine<b>Sync</b></span></span><p class="muted tiny">Sunucusuz ortak izleme odası. v2.3.0</p></div>
+        <nav class="foot-links" aria-label="Alt bağlantılar"><a href="#ozellikler">Özellikler</a><a href="#nasil">Nasıl çalışır</a><a href="#sss">SSS</a><a href="#" id="aboutLink">Kısayollar ve yardım</a></nav>
+        <p class="muted tiny foot-legal">Yalnızca yasal kaynaklar. Üçüncü taraf site ve markalar kendi sahiplerine aittir.</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ===================== ODA ===================== -->
+  <div id="roomView" class="room" hidden>
+    <header class="topbar">
+      <div class="brand small hide-sm"><span class="brand-mark" data-icon="play"></span><span class="hide-md">Cine<b>Sync</b></span></div>
+      <button id="codePill" class="pill pill-code" type="button" aria-label="Oda kodunu kopyala">
+        <span id="netDot" class="dot" aria-hidden="true"></span><span id="roomLockIc" class="room-lock" data-icon="lock" hidden title="Şifreli oda"></span><span id="roomCodeText">------</span><span data-icon="copy"></span>
+      </button>
+      <button id="inviteBtn" class="btn btn-secondary btn-sm" type="button" data-icon="share" aria-label="Davet et"><span class="hide-sm">Davet et</span></button>
+      <span id="netPill" class="pill pill-muted hide-md" role="status"><span class="dot"></span><span id="netText">Bağlanıyor…</span></span>
+      <span id="connPill" class="pill pill-conn" role="status" aria-live="polite" hidden><span class="spin" aria-hidden="true"></span><span id="connText">Yeniden bağlanıyor…</span></span>
+      <span id="lockPill" class="pill pill-lock" hidden><span data-icon="lock"></span><span id="lockText">Kilitli</span></span>
+      <span id="syncLabel" class="sync-label muted hide-lg" aria-live="polite"></span>
+      <div class="spacer"></div>
+      <button id="micBtn" class="icon-btn" type="button" aria-label="Mikrofon" title="Mikrofon (Ctrl+D)" data-icon="micOff"></button>
+      <button id="camBtn" class="icon-btn" type="button" aria-label="Kamera" title="Kamera (Ctrl+E)" data-icon="camOff"></button>
+      <button id="theaterBtn" class="icon-btn hide-xs" type="button" aria-label="Paneli gizle / göster" aria-pressed="false" title="Paneli gizle / göster (T)" data-icon="sidebar"></button>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="icon-btn" type="button" aria-label="Diğer seçenekler" aria-haspopup="menu" aria-expanded="false" data-icon="more"></button>
+        <div id="menu" class="menu" role="menu" hidden>
+          <button role="menuitem" type="button" data-menu="invite" data-icon="share">Davet linkini paylaş</button>
+          <button role="menuitem" type="button" data-menu="copy" data-icon="copy">Oda kodunu kopyala</button>
+          <button role="menuitem" type="button" data-menu="catalog" data-icon="grid">İzin verilen siteler <kbd>S</kbd></button>
+          <button role="menuitem" type="button" data-menu="syncAll" data-icon="sync">Herkesi bana eşitle</button>
+          <button role="menuitem" type="button" data-menu="devices" data-icon="headphones">Ses ve görüntü cihazları</button>
+          <button role="menuitem" type="button" data-menu="lock" data-icon="lock"><span id="lockMenuLabel">Kontrolü kilitle (yalnızca ben)</span></button>
+          <button role="menuitem" type="button" data-menu="theater" data-icon="sidebar">Paneli gizle / göster <kbd>T</kbd></button>
+          <button role="menuitem" type="button" data-menu="muteRemote" data-icon="volumeOff"><span id="muteRemoteLabel">Diğerlerinin sesini kapat</span></button>
+          <button role="menuitem" type="button" data-menu="settings" data-icon="settings">Ayarlar</button>
+          <button role="menuitem" type="button" data-menu="help" data-icon="keyboard">Kısayollar ve yardım <kbd>?</kbd></button>
+          <hr>
+          <button role="menuitem" type="button" data-menu="leave" data-icon="logout" class="danger">Odadan ayrıl</button>
+        </div>
+      </div>
+      <button id="leaveBtn" class="btn btn-danger btn-sm hide-sm" type="button" data-icon="logout"><span class="hide-md">Ayrıl</span></button>
+    </header>
+
+    <div class="workspace">
+      <section class="stage-col" aria-label="Ortak sahne">
+        <form id="addressBar" class="addressbar" autocomplete="off" role="search" novalidate>
+          <button id="backBtn" class="icon-btn hide-sm" type="button" aria-label="Geri" title="Önceki kaynak" data-icon="back" disabled></button>
+          <div class="url-wrap">
+            <span id="engineBadge" class="engine-badge hide-sm" title="Kaynak türü">—</span>
+            <input id="urlInput" type="url" placeholder="Link yapıştır: YouTube, Vimeo, MP4, .m3u8…" spellcheck="false" inputmode="url" enterkeyhint="go" aria-label="Adres veya arama">
+            <button id="clearUrl" class="mini-btn" type="button" aria-label="Temizle" data-icon="x" hidden></button>
+          </div>
+          <button class="btn btn-primary btn-sm go-btn" type="submit" data-icon="arrowRight" aria-label="Aç"><span class="hide-sm">Aç</span></button>
+          <button id="catalogBtn" class="btn btn-secondary btn-sm cat-btn" type="button" data-icon="grid" aria-haspopup="dialog" title="İzin verilen siteleri göster (S)" aria-label="Siteleri göster"><span class="hide-md">Siteleri göster</span></button>
+          <button id="toolsBtn" class="icon-btn" type="button" data-icon="sliders" aria-expanded="false" aria-controls="toolRow" title="Araçları göster / gizle" aria-label="Araçlar"></button>
+        </form>
+        <div id="toolRow" class="toolrow" hidden>
+          <div id="quickBar" class="quickbar" aria-label="Son açılan linkler"></div>
+          <div class="tool-btns">
+            <button id="reloadBtn" class="icon-btn" type="button" aria-label="Yeniden yükle" title="Yeniden yükle" data-icon="reload"></button>
+            <button id="screenBtn" class="icon-btn" type="button" aria-label="Ekranı / sekmeyi yansıt" title="Ekranı / sekmeyi yansıt" data-icon="screen"></button>
+            <button id="laserBtn" class="icon-btn" type="button" aria-label="Lazer işaretçi" title="Lazer işaretçi (L)" data-icon="laser"></button>
+          </div>
+        </div>
+
+        <div id="player" class="player">
+          <div id="stage" class="stage">
+            <div id="stageEmpty" class="stage-empty">
+              <span class="big-icon" data-icon="film"></span>
+              <h3>Ne izliyoruz?</h3>
+              <p class="muted">Bir link yapıştırın ya da izin verilen sitelerden ve ücretsiz filmlerden birini seçin. Açtığınız her şey odadaki herkeste aynı anda açılır.</p>
+              <div class="empty-actions">
+                <button class="btn btn-primary btn-sm" type="button" data-empty="catalog" data-icon="grid">Siteleri göster</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-empty="paste" data-icon="link">Panodan yapıştır</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-empty="invite" data-icon="share">Davet et</button>
+              </div>
+              <ol class="onboard muted tiny" id="onboard">
+                <li><b>1</b>Davet linkini paylaş</li><li><b>2</b>Link yapıştır veya film seç</li><li><b>3</b>Birlikte izle, tepki gönder</li>
+              </ol>
+            </div>
+            <video id="stageVideo" playsinline preload="auto" hidden></video>
+            <div id="stageYT" class="stage-fill" hidden></div>
+            <div id="stageVimeo" class="stage-fill" hidden></div>
+            <div id="stageFrame" class="stage-fill stage-frame" hidden>
+              <iframe title="Paylaşılan sayfa" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            <div id="stageBlocked" class="stage-fill stage-center" hidden></div>
+            <div id="stageScreen" class="stage-fill stage-screen" hidden>
+              <video autoplay playsinline></video>
+              <span class="screen-label"><span data-icon="screen"></span><span data-role="label"></span></span>
+            </div>
+            <div id="laserLayer" class="laser-layer"></div>
+            <button id="unlockOverlay" class="unlock" type="button" hidden><span data-icon="volumeOff"></span>Sesi açmak için dokun</button>
+          </div>
+
+          <!-- Tepkiler sahnenin ve kutucukların üstünde (tam ekranda da görünür) -->
+          <div id="reactions" class="reactions-layer" aria-hidden="true"></div>
+          <!-- Tam ekranda kameraların yüzen kutucukları -->
+          <div id="pipLayer" class="pip-layer" aria-label="Kameralar"></div>
+          <!-- Kontroller gizliyken iframe'lerin üstünde fare/dokunma hareketini yakalar -->
+          <div id="fsWake" class="fs-wake" aria-hidden="true"></div>
+
+          <!-- Tam ekran üst araç çubuğu -->
+          <div class="fs-bar" role="toolbar" aria-label="Tam ekran araçları">
+            <span class="fs-title" id="fsTitle"></span>
+            <button id="fsEmojiBtn" class="fs-btn" type="button" data-icon="smile" aria-haspopup="true" aria-label="Tepki gönder" title="Tepki gönder (E)"><span class="fs-lbl">Tepki</span></button>
+            <button id="fsCamsBtn" class="fs-btn" type="button" data-icon="cam" aria-pressed="true" aria-label="Kameraları gizle / göster" title="Kameraları gizle / göster (V)"><span class="fs-lbl" id="fsCamsLabel">Kameraları gizle</span></button>
+            <button id="fsSizeBtn" class="fs-btn" type="button" data-icon="resize" aria-label="Kamera boyutu" title="Kamera boyutu (B)"><span class="fs-lbl">Boyut</span></button>
+            <button id="fsMuteBtn" class="fs-btn" type="button" data-icon="volume" aria-label="Diğerlerinin sesini aç/kapat" title="Diğerlerinin sesi"><span class="fs-lbl" id="fsMuteLabel">Sesler açık</span></button>
+            <button id="fsExitBtn" class="fs-btn" type="button" data-icon="minimize" aria-label="Tam ekrandan çık" title="Tam ekrandan çık (F / Esc)"><span class="fs-lbl">Çık</span></button>
+          </div>
+
+          <div id="transport" class="transport" hidden>
+            <div class="seek-row">
+              <span id="curTime" class="mono">00:00</span>
+              <input id="seekBar" type="range" min="0" max="1000" value="0" aria-label="Konum">
+              <span id="durTime" class="mono">00:00</span>
+            </div>
+            <div class="controls-row">
+              <div class="group">
+                <button id="rewBtn" class="icon-btn" type="button" aria-label="10 saniye geri" title="10 sn geri (←)" data-icon="rewind"></button>
+                <button id="playBtn" class="play-btn" type="button" aria-label="Oynat / Duraklat" title="Oynat / Duraklat (Boşluk)" data-icon="play"></button>
+                <button id="fwdBtn" class="icon-btn" type="button" aria-label="10 saniye ileri" title="10 sn ileri (→)" data-icon="forward"></button>
+                <button id="resyncBtn" class="btn btn-ghost btn-sm" type="button" title="Herkesi bana eşitle (herkes senin konumuna atlar)" data-icon="sync" aria-label="Herkesi bana eşitle"><span class="lbl">Eşitle</span></button>
+                <span id="rateBadge" class="rate-badge" hidden>1×</span>
+              </div>
+              <div class="group">
+                <button id="emojiBtn" class="icon-btn" type="button" aria-haspopup="true" aria-label="Tepki gönder" title="Tepki gönder (E)" data-icon="smile"></button>
+                <button id="playerSetBtn" class="icon-btn" type="button" aria-haspopup="true" aria-label="Hız ve altyazı" title="Hız, altyazı, ses" data-icon="settings"></button>
+                <button id="muteBtn" class="icon-btn mute-btn" type="button" aria-label="Sessiz" title="Sessiz (M)" data-icon="volume"></button>
+                <input id="volBar" class="vol" type="range" min="0" max="100" value="100" aria-label="Ses düzeyi">
+                <button id="fsBtn" class="icon-btn" type="button" aria-label="Tam ekran" title="Tam ekran (F)" data-icon="maximize"></button>
+              </div>
+            </div>
+          </div>
+          <button id="fsFloatBtn" class="icon-btn fs-float" type="button" aria-label="Tam ekran" title="Tam ekran (F)" data-icon="maximize"></button>
+          <button id="fsEmojiFloat" class="icon-btn fs-float fs-float-2" type="button" aria-label="Tepki gönder" title="Tepki gönder (E)" data-icon="smile"></button>
+
+          <!-- Açılır paneller (oynatıcının içinde: tam ekranda da çalışır) -->
+          <div id="emojiPop" class="pop emoji-pop" role="dialog" aria-label="Tepki seç" hidden>
+            <div class="emoji-grid" role="group" aria-label="Tepkiler">
+              <button type="button" data-emoji="😂" aria-label="Gülme">😂</button><button type="button" data-emoji="😍" aria-label="Kalp göz">😍</button><button type="button" data-emoji="😮" aria-label="Şaşkın">😮</button><button type="button" data-emoji="👏" aria-label="Alkış">👏</button><button type="button" data-emoji="🔥" aria-label="Ateş">🔥</button><button type="button" data-emoji="😢" aria-label="Üzgün">😢</button><button type="button" data-emoji="❤️" aria-label="Kalp">❤️</button><button type="button" data-emoji="😱" aria-label="Korku">😱</button><button type="button" data-emoji="🤣" aria-label="Kahkaha">🤣</button><button type="button" data-emoji="👍" aria-label="Beğen">👍</button><button type="button" data-emoji="🍿" aria-label="Patlamış mısır">🍿</button><button type="button" data-emoji="🎉" aria-label="Kutlama">🎉</button>
+            </div>
+          </div>
+          <div id="playerPop" class="pop player-pop" role="dialog" aria-label="Oynatma ayarları" hidden>
+            <div class="pop-sec">
+              <span class="pop-title"><span data-icon="gauge"></span>Oynatma hızı <small class="muted">(herkeste)</small></span>
+              <div class="seg" id="rateSeg" role="radiogroup" aria-label="Oynatma hızı">
+                <button type="button" data-rate="0.5" role="radio">0.5×</button><button type="button" data-rate="0.75" role="radio">0.75×</button><button type="button" data-rate="1" role="radio">1×</button><button type="button" data-rate="1.25" role="radio">1.25×</button><button type="button" data-rate="1.5" role="radio">1.5×</button><button type="button" data-rate="2" role="radio">2×</button>
+              </div>
+            </div>
+            <div class="pop-sec" id="subsSec">
+              <span class="pop-title"><span data-icon="captions"></span>Altyazı <small class="muted">(.vtt / .srt, yalnızca video dosyaları)</small></span>
+              <form id="subsForm" class="subs-row" novalidate>
+                <input id="subsUrl" type="url" placeholder="Altyazı linki (herkeste)" aria-label="Altyazı linki" inputmode="url">
+                <button class="btn btn-secondary btn-sm" type="submit">Ekle</button>
+              </form>
+              <div class="subs-actions">
+                <label class="btn btn-ghost btn-sm file-btn"><span data-icon="upload"></span>Dosyadan (yalnızca sende)<input id="subsFile" type="file" accept=".vtt,.srt,text/vtt" hidden></label>
+                <button id="subsOff" class="btn btn-ghost btn-sm" type="button" data-icon="x">Kapat</button>
+              </div>
+            </div>
+            <div class="pop-sec">
+              <span class="pop-title"><span data-icon="sync"></span>Senkron <small class="muted" id="syncInfo"></small></span>
+              <div class="pop-btns">
+                <button id="syncMeBtn" class="btn btn-ghost btn-sm" type="button" data-icon="target">Kendimi odaya eşitle</button>
+                <button id="syncAllBtn" class="btn btn-secondary btn-sm" type="button" data-icon="sync">Herkesi bana eşitle</button>
+                <button id="pipBtn" class="btn btn-ghost btn-sm" type="button" data-icon="pip">Resim içinde resim</button>
+              </div>
+            </div>
+            <div class="pop-sec pop-vol">
+              <span class="pop-title"><span data-icon="volume"></span>Ses</span>
+              <div class="vol-row"><button id="muteBtn2" class="icon-btn sm" type="button" aria-label="Sessiz" data-icon="volume"></button><input id="volBar2" type="range" min="0" max="100" value="100" aria-label="Ses düzeyi"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="below-player">
+          <div id="frameHint" class="frame-hint" hidden>
+            <span data-icon="info"></span><span data-role="text"></span>
+            <a href="#" target="_blank" rel="noopener noreferrer" class="link-btn"><span data-icon="external"></span>Yeni sekmede aç</a>
+            <button type="button" class="link-btn" data-act="share-screen"><span data-icon="screen"></span>Yansıt</button>
+            <button type="button" class="mini-btn" data-act="dismiss" aria-label="Kapat" data-icon="x"></button>
+          </div>
+          <div id="embedNote" class="embed-note" hidden></div>
+        </div>
+      </section>
+
+      <aside class="sidebar" aria-label="Kameralar, sohbet ve kişiler">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="chat" role="tab" aria-selected="true" aria-controls="tab-chat" type="button"><span data-icon="chat"></span><span>Sohbet</span><span id="unread" class="badge" hidden>0</span></button>
+          <button class="tab" data-tab="cams" role="tab" aria-selected="false" aria-controls="tab-cams" type="button"><span data-icon="cam"></span><span>Kameralar</span></button>
+          <button class="tab" data-tab="members" role="tab" aria-selected="false" aria-controls="tab-members" type="button"><span data-icon="users"></span><span>Kişiler</span><span id="memberCount" class="count">1</span></button>
+        </div>
+
+        <section id="tab-cams" class="tab-body cams-panel" role="tabpanel" aria-label="Kameralar" hidden>
+          <div class="cams-head">
+            <button id="camsToggle" class="cams-toggle" type="button" aria-expanded="true" aria-controls="videoGrid"><span data-icon="cam"></span>Kameralar<span data-icon="chevronDown" class="chev"></span></button>
+            <div class="cams-tools">
+              <button id="camsMicBtn" class="icon-btn sm" type="button" aria-label="Mikrofon" data-icon="micOff"></button>
+              <button id="camsCamBtn" class="icon-btn sm" type="button" aria-label="Kamera" data-icon="camOff"></button>
+            </div>
+          </div>
+          <div id="videoGrid" class="video-grid">
+            <div class="tile" id="tile-self" data-id="self">
+              <video id="selfVideo" autoplay playsinline muted></video>
+              <div class="avatar" id="selfAvatar"></div>
+              <div class="tile-label"><span class="name" id="selfName">Sen</span><span class="flags" id="selfFlags"></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-chat" class="tab-body chat" role="tabpanel" aria-label="Sohbet">
+          <div id="chatList" class="chat-list" aria-live="polite">
+            <div class="chat-empty"><span data-icon="chat"></span><p>Henüz mesaj yok.<br><span class="muted tiny">Sohbet uçtan uca şifrelidir.</span></p></div>
+          </div>
+          <div id="typing" class="typing muted tiny" aria-live="polite"></div>
+          <div id="replyBar" class="reply-bar" hidden><span data-icon="reply"></span><span class="rb-text" id="replyText"></span><button id="replyCancel" class="mini-btn" type="button" aria-label="Yanıtı iptal et" data-icon="x"></button></div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" type="text" maxlength="1000" placeholder="Mesaj yaz…" autocomplete="off" aria-label="Mesaj" enterkeyhint="send">
+            <button class="icon-btn primary" type="submit" aria-label="Gönder" data-icon="send"></button>
+          </form>
+        </section>
+
+        <section id="tab-members" class="tab-body" role="tabpanel" aria-label="Kişiler" hidden>
+          <ul id="memberList" class="member-list"></ul>
+          <h5 class="muted">Son işlemler</h5>
+          <ul id="historyList" class="history-list"><li class="muted">Henüz işlem yok.</li></ul>
+        </section>
+      </aside>
+    </div>
+
+    <!-- Mobil: tek, sade alt işlem çubuğu (geri kalan her şey "Daha fazla" sayfasında) -->
+    <nav id="mbar" class="mbar" aria-label="Oda işlemleri">
+      <button id="mMic" class="mb off" type="button" data-icon="micOff" aria-label="Mikrofon kapalı — aç" aria-pressed="false"><span>Mikrofon</span></button>
+      <button id="mCam" class="mb off" type="button" data-icon="camOff" aria-label="Kamera kapalı — aç" aria-pressed="false"><span>Kamera</span></button>
+      <button id="mChat" class="mb" type="button" data-icon="chat" aria-label="Sohbet"><span>Sohbet</span><b id="mUnread" class="mb-badge" hidden>0</b></button>
+      <button id="mEmoji" class="mb" type="button" data-icon="smile" aria-label="Tepki gönder" aria-haspopup="true"><span>Tepki</span></button>
+      <button id="mMore" class="mb" type="button" data-icon="more" aria-label="Daha fazla" aria-haspopup="dialog"><span>Daha fazla</span></button>
+    </nav>
+    <!-- Barındırma rozetinin (sağ alt köşe) altında hiçbir düğme kalmasın diye ayrılan boşluk -->
+    <div class="badge-safe" aria-hidden="true"><span id="mStatus" class="tiny muted"></span></div>
+    <div id="remoteAudio" class="remote-audio" aria-hidden="true"></div>
+  </div>
+
+  <button id="audioUnlock" class="audio-unlock" type="button" hidden><span data-icon="volumeOff"></span>Karşı tarafı duymak için dokun</button>
+
+  <!-- ===================== KOD KULLANIMDA / ŞİFRE ===================== -->
+  <dialog id="occupiedDialog" class="dialog dialog-sm" aria-labelledby="occTitle">
+    <form method="dialog">
+      <h3 id="occTitle">Bu kod kullanımda</h3>
+      <p id="occText" class="muted">Bu kodla açık bir oda var. Katılmak ister misin?</p>
+      <div class="dialog-actions gap">
+        <button class="btn btn-ghost" value="other" type="submit">Başka kod seç</button>
+        <button class="btn btn-primary" value="join" type="submit" id="occJoin">Katıl</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="passDialog" class="dialog dialog-sm" aria-labelledby="passTitle">
+    <form method="dialog" id="passForm">
+      <h3 id="passTitle"><span data-icon="lock"></span> Bu oda şifreli</h3>
+      <p class="muted" id="passText">Odadakilerin mesajları çözülemiyor: oda şifreli ya da yazdığın şifre yanlış. Oda şifresini gir.</p>
+      <label class="field"><span>Oda şifresi</span><input id="passInput" type="password" maxlength="64" autocomplete="current-password" enterkeyhint="go"></label>
+      <div class="dialog-actions gap">
+        <button class="btn btn-ghost" value="cancel" type="submit">Vazgeç</button>
+        <button class="btn btn-primary" value="ok" type="submit">Şifreyle katıl</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===================== MOBİL: DAHA FAZLA ===================== -->
+  <dialog id="moreSheet" class="sheet" aria-labelledby="sheetTitle">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h3 id="sheetTitle">Daha fazla</h3>
+      <button class="icon-btn" type="button" data-sheet="close" aria-label="Kapat" data-icon="x"></button>
+    </div>
+    <form id="sheetLink" class="sheet-link" autocomplete="off" novalidate>
+      <input id="sheetUrl" type="url" placeholder="Link yapıştır (YouTube, Vimeo, MP4…)" inputmode="url" enterkeyhint="go" aria-label="Link">
+      <button class="btn btn-primary btn-sm" type="submit" data-icon="arrowRight">Aç</button>
+    </form>
+    <div class="sheet-grid">
+      <button type="button" data-sheet="catalog" data-icon="grid"><span>Siteler</span></button>
+      <button type="button" data-sheet="invite" data-icon="share"><span>Davet et</span></button>
+      <button type="button" data-sheet="members" data-icon="users"><span>Kişiler <b id="sheetCount">1</b></span></button>
+      <button type="button" data-sheet="cams" data-icon="cam"><span>Kameralar</span></button>
+      <button type="button" data-sheet="player" data-icon="gauge"><span>Hız · altyazı</span></button>
+      <button type="button" data-sheet="syncAll" data-icon="sync"><span>Herkesi bana eşitle</span></button>
+      <button type="button" data-sheet="lock" data-icon="lock"><span id="sheetLockLabel">Kontrolü kilitle</span></button>
+      <button type="button" data-sheet="pip" data-icon="pip"><span>Küçük pencere</span></button>
+      <button type="button" data-sheet="muteRemote" data-icon="volumeOff"><span id="sheetMuteLabel">Diğerlerini sustur</span></button>
+      <button type="button" data-sheet="devices" data-icon="headphones"><span>Ses cihazları</span></button>
+      <button type="button" data-sheet="screen" data-icon="screen" id="sheetScreen"><span>Ekran yansıt</span></button>
+      <button type="button" data-sheet="settings" data-icon="settings"><span>Ayarlar</span></button>
+      <button type="button" data-sheet="help" data-icon="info"><span>Yardım</span></button>
+      <button type="button" data-sheet="leave" data-icon="logout" class="danger"><span>Ayrıl</span></button>
+    </div>
+  </dialog>
+
+  <!-- ===================== İZİN VERİLEN SİTELER (KATALOG) ===================== -->
+  <dialog id="catalogDialog" class="dialog dialog-wide catalog" aria-labelledby="catTitle">
+    <div class="cat-head">
+      <div>
+        <h3 id="catTitle">İzin verilen siteler</h3>
+        <p class="muted tiny">Yalnızca yasal, resmî ve ücretsiz kaynaklar. Seçtiğin şey odadaki herkeste açılır.</p>
+      </div>
+      <button class="icon-btn" type="button" data-close aria-label="Kapat" data-icon="x"></button>
+    </div>
+    <div class="cat-tools">
+      <label class="cat-search"><span data-icon="search"></span><input id="catSearch" type="text" placeholder="Film veya site ara…" aria-label="Katalogda ara" autocomplete="off"></label>
+      <div id="catFilters" class="chips cat-filters" role="group" aria-label="Kategori"></div>
+    </div>
+    <div class="cat-body">
+      <section aria-labelledby="filmsTitle">
+        <h4 id="filmsTitle"><span data-icon="star"></span>Odada tam senkron izlenebilen ücretsiz filmler</h4>
+        <div id="filmGrid" class="film-grid"></div>
+      </section>
+      <section aria-labelledby="sitesTitle">
+        <h4 id="sitesTitle"><span data-icon="globe"></span>Siteler</h4>
+        <div id="siteGrid" class="site-grid"></div>
+      </section>
+      <section id="recentSec" aria-labelledby="recentTitle" hidden>
+        <h4 id="recentTitle"><span data-icon="history"></span>Son açtıkların</h4>
+        <div id="recentGrid" class="chips"></div>
+      </section>
+      <p class="legal-note tiny"><span data-icon="shield"></span>Korsan veya lisanssız yayın yapan siteler listelenmez. “Odada açılır” rozetli siteler sayfanın içinde gösterilir; “Yeni sekmede” rozetli siteler gömülmeyi yasakladığı için herkese bir kart gösterilir. Bu sitelerdeki YouTube, Vimeo ve Dailymotion linklerini adres çubuğuna yapıştırırsan odada oynar.</p>
+    </div>
+  </dialog>
+
+  <!-- ===================== AYARLAR ===================== -->
+  <dialog id="settingsDialog" class="dialog" aria-labelledby="setTitle">
+    <form method="dialog" id="settingsForm">
+      <h3 id="setTitle">Ayarlar</h3>
+      <label class="field"><span>Görünen adın</span><input id="setName" type="text" maxlength="24" autocomplete="nickname"></label>
+      <div class="field"><span id="setColorLabel">Profil rengin</span><div id="setColor" class="color-picker" role="radiogroup" aria-labelledby="setColorLabel"></div></div>
+      <div class="set-list">
+        <label class="switch"><input type="checkbox" id="setSound"><span class="sw" aria-hidden="true"></span><span>Bildirim sesi</span></label>
+        <label class="switch"><input type="checkbox" id="setAutoHide"><span class="sw" aria-hidden="true"></span><span>Tam ekranda kontrolleri otomatik gizle</span></label>
+        <label class="switch"><input type="checkbox" id="setReactions"><span class="sw" aria-hidden="true"></span><span>Uçan tepkileri göster</span></label>
+        <label class="switch"><input type="checkbox" id="setNotify"><span class="sw" aria-hidden="true"></span><span>Tam ekranda sohbet mesajlarını göster</span></label>
+        <label class="switch"><input type="checkbox" id="setDuck"><span class="sw" aria-hidden="true"></span><span>Biri konuşunca film sesini otomatik kıs</span></label>
+      </div>
+      <fieldset class="devices" id="devicesSec">
+        <legend><span data-icon="headphones"></span>Ses ve görüntü cihazları</legend>
+        <label class="field"><span>Mikrofon</span><select id="setMic"><option value="">Sistem varsayılanı</option></select></label>
+        <label class="field" id="setOutWrap"><span>Hoparlör / kulaklık</span><select id="setOut"><option value="">Sistem varsayılanı (önerilen)</option></select></label>
+        <label class="field"><span>Kamera</span><select id="setCamSel"><option value="">Sistem varsayılanı</option></select></label>
+        <p class="tiny muted" id="devNote">Kulaklık takınca ses otomatik olarak kulaklığa geçer. Telefonlarda sesin nereden çıkacağını işletim sistemi belirler.</p>
+      </fieldset>
+      <div class="dialog-actions"><button class="btn btn-primary" value="ok">Kaydet</button></div>
+    </form>
+  </dialog>
+
+  <!-- ===================== YARDIM ===================== -->
+  <dialog id="helpDialog" class="dialog" aria-labelledby="helpTitle">
+    <form method="dialog">
+      <h3 id="helpTitle">CineSync nasıl çalışır?</h3>
+      <ul class="help-list">
+        <li><b>Tam senkron:</b> MP4/WebM, HLS (.m3u8), YouTube ve Vimeo. Biri oynatır, durdurur veya sararsa herkeste aynı anda olur.</li>
+        <li><b>Gömülü oynatıcılar:</b> Dailymotion, Twitch, Drive, Streamable, OK.ru, Rutube, Archive.org, Spotify, SoundCloud, Kick. Link herkeste açılır; oynatma kontrolü kişiye özeldir.</li>
+        <li><b>Korumalı siteler:</b> Google, Instagram, Netflix gibi siteler gömülmeye izin vermez; “Yeni sekmede aç” ve <b>ekran yansıtma</b> kullanılır.</li>
+        <li><b>Tam ekran:</b> Kameralar köşelerde küçük kutucuk olarak görünür; sürükleyip başka köşeye bırakabilir, gizleyebilirsin. Kontroller gizlenirse fareyi oynat ya da ekrana dokun; video duraklatılınca kontroller hep görünür.</li>
+        <li><b>Siteler:</b> “Siteleri göster” düğmesi yalnızca yasal ve ücretsiz film kaynaklarını listeler.</li>
+      </ul>
+      <h4>Klavye kısayolları</h4>
+      <dl class="shortcuts">
+        <div><dt><kbd>Boşluk</kbd> / <kbd>K</kbd></dt><dd>Oynat / duraklat</dd></div>
+        <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>10 sn geri / ileri</dd></div>
+        <div><dt><kbd>F</kbd></dt><dd>Tam ekran</dd></div>
+        <div><dt><kbd>V</kbd></dt><dd>Kameraları gizle / göster</dd></div>
+        <div><dt><kbd>B</kbd></dt><dd>Kamera kutucuk boyutu</dd></div>
+        <div><dt><kbd>T</kbd></dt><dd>Paneli gizle / göster</dd></div>
+        <div><dt><kbd>S</kbd></dt><dd>İzin verilen siteler</dd></div>
+        <div><dt><kbd>E</kbd></dt><dd>Tepki gönder</dd></div>
+        <div><dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Hızlı tepki</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>Sesi kapat / aç</dd></div>
+        <div><dt><kbd>L</kbd></dt><dd>Lazer işaretçi</dd></div>
+        <div><dt><kbd>/</kbd></dt><dd>Adres çubuğu</dd></div>
+        <div><dt><kbd>Enter</kbd></dt><dd>Sohbete yaz</dd></div>
+        <div><dt><kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>E</kbd></dt><dd>Mikrofon / kamera</dd></div>
+        <div><dt><kbd>?</kbd></dt><dd>Bu pencere</dd></div>
+      </dl>
+      <div class="dialog-actions"><button class="btn btn-primary" value="ok">Anladım</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

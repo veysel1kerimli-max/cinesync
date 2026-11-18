@@ -1,0 +1,27 @@
+✓ oda oluşturuldu JDS6GH
+✓ davet linki kodu doldurdu 
+✓ iki üye birbirini gördü 
+✓ röle bağlantısı Bağlı · 2/7 röle
+✓ sohbet iletildi 
+✓ sohbet geri iletildi + link 
+✓ MP4 B tarafında açıldı 
+✓ MP4 iki tarafta oynuyor ve yakın A=7.7 B=7.7
+✓ duraklatma senkron 
+✓ B ileri sardı, A eşitlendi A=298s
+✓ B oynattı, A oynuyor 
+✓ HLS B tarafında oynuyor 
+✓ google.com -> B tarafında "yeni sekmede aç" kartı 
+✓ Wikipedia B tarafında iframe olarak açıldı 
+✓ Wikipedia içeriği gerçekten yüklendi Sinema - Vikipedi
+✓ YouTube oynatıcısı B tarafında oluştu https://www.youtube.com/embed/aqz-KE-bpKQ?autoplay=0&controls=1&rel=0&playsinlin
+✓ YouTube oynatma durumu okunabiliyor (IFrame API) {"st":1,"t":35.303425129699704}
+✓ YouTube iki tarafta aynı konumda A=35.4 B=35.3
+✓ B YouTube içinde duraklattı -> A duraklatıldı 
+✓ Vimeo oynatıcısı B tarafında oluştu 
+✓ Vimeo Player API bağlandı (senkron kontrolü) 
+✓ WebRTC teklif/cevap odada iletildi (sinyalleşme) stable
+✓ B, A'nın kamera/mikrofon durumunu gördü 
+✓ Ekran paylaşımı başladığında B sahnesi yansıtma moduna geçti Veysel ekranını paylaşıyor
+✓ A konsol hatası yok []
+✓ B konsol hatası yok []
+26/26 kontrol geçti

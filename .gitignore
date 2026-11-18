@@ -1,0 +1,6 @@
+node_modules/
+tests/shots/
+*.zip
+.netlify/
+*.log
+tests/*.json
