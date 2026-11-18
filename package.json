@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "dependencies": {
     "@noble/curves": "^2.4.0",
@@ -17,5 +17,6 @@
     "esbuild": "^0.28.2",
     "hls.js": "^1.7.4",
     "playwright-core": "^1.65.1"
-  }
+  },
+  "private": true
 }

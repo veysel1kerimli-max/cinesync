@@ -1,0 +1,56 @@
+CineSync — Tescilli Yazılım Lisansı / Proprietary Software License
+
+Telif Hakkı (c) 2026 Veysel Kerimli. Tüm hakları saklıdır.
+Copyright (c) 2026 Veysel Kerimli. All rights reserved.
+
+TÜRKÇE
+
+1. Bu depodaki kaynak kodu, tasarım, metinler, görseller ve diğer tüm
+   içerik ("Yazılım") Veysel Kerimli'ye aittir.
+2. Yazılım yalnızca incelenmek amacıyla herkese açık tutulmaktadır.
+   Herkese açık olması, herhangi bir kullanım hakkı verildiği anlamına gelmez.
+3. Telif hakkı sahibinin önceden verilmiş yazılı izni olmadan Yazılımın
+   tamamı veya bir kısmı kopyalanamaz, çoğaltılamaz, değiştirilemez,
+   türev çalışmalarda kullanılamaz, yeniden yayınlanamaz, dağıtılamaz,
+   alt lisanslanamaz, satılamaz ve başka bir sunucuda ya da alan adında
+   barındırılamaz.
+4. Yazılım hiçbir şekilde ticari amaçla kullanılamaz. Ücretli hizmet,
+   reklam geliri, sponsorluk veya herhangi bir ticari ürün/hizmetin
+   parçası olarak kullanılması yasaktır.
+5. Son kullanıcılar, telif hakkı sahibinin resmi olarak yayınladığı
+   adreslerdeki (ör. https://cinesync-veysel.netlify.app ve
+   https://veysel1kerimli-max.github.io/cinesync/) hizmeti kişisel ve
+   ticari olmayan amaçlarla kullanabilir.
+6. Yazılım "OLDUĞU GİBİ" sunulur; hiçbir garanti verilmez. Telif hakkı
+   sahibi, Yazılımın kullanımından doğan hiçbir zarardan ve kullanıcıların
+   paylaştığı içerikten sorumlu tutulamaz.
+7. İzin talepleri için GitHub üzerinden telif hakkı sahibiyle iletişime
+   geçiniz: https://github.com/veysel1kerimli-max
+
+ENGLISH
+
+1. The source code, design, text, images and all other content in this
+   repository (the "Software") are owned by Veysel Kerimli.
+2. The Software is publicly visible for viewing purposes only. Public
+   visibility does not grant any license or right of use.
+3. Without prior written permission from the copyright holder, you may not
+   copy, reproduce, modify, create derivative works from, republish,
+   distribute, sublicense, sell, or host the Software, in whole or in part,
+   on any other server or domain.
+4. Any commercial use of the Software is strictly prohibited, including
+   paid services, advertising revenue, sponsorship, or inclusion in any
+   commercial product or service.
+5. End users may use the service at the copyright holder's official
+   addresses for personal, non-commercial purposes.
+6. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The
+   copyright holder is not liable for any damages arising from its use or
+   for any content shared by users.
+
+ÜÇÜNCÜ TARAF BİLEŞENLER / THIRD-PARTY COMPONENTS
+
+Aşağıdaki bileşenler bu lisansa tabi değildir; kendi lisanslarıyla dağıtılır.
+The following components are not covered by this license and remain under
+their own licenses:
+- hls.js (vendor/hls.min.js) — Apache License 2.0, see vendor/hls.LICENSE
+- @noble/curves / @noble/hashes (js/vendor/schnorr.js) — MIT License,
+  Copyright (c) Paul Miller (https://paulmillr.com)

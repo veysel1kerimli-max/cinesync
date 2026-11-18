@@ -284,3 +284,10 @@ Geliştirme: `npm install` → `npm test` (link testleri) → `npm run build` (t
 ## Lisanslar
 
 CineSync kodu: MIT. Dahil edilen kütüphaneler: noble-curves (MIT), hls.js (Apache-2.0). İkon çizimleri Lucide (ISC) tarzındadır.
+
+## Lisans
+
+Telif Hakkı © 2026 Veysel Kerimli. **Tüm hakları saklıdır.**
+
+Bu proje tescilli bir yazılımdır ve yalnızca incelenmek amacıyla herkese açıktır. Yazılı izin olmadan kopyalanması, değiştirilmesi, yeniden yayınlanması, başka bir yerde barındırılması ve **her türlü ticari kullanımı yasaktır**. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın. Üçüncü taraf bileşenler (hls.js, noble) kendi lisanslarına tabidir.
+
