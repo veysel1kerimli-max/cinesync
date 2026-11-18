@@ -1,9 +1,29 @@
 # CineSync v2.3 — Ortak İzleme Odası
 
-Canlı: https://cinesync-veysel.netlify.app
+Canlı: https://cinesync-veysel.netlify.app · GitHub Pages: https://veysel1kerimli-max.github.io/cinesync/
 
 Arkadaşlarınla aynı anda video izle, görüntülü konuş, sohbet et ve ekranını paylaş.
 Sunucu, hesap veya API anahtarı gerektirmez; statik bir web sitesi olarak her yerde yayınlanabilir.
+
+## Ekran görüntüleri
+
+![Ana sayfa](docs/screenshots/01-ana-sayfa.png)
+
+| Oda (masaüstü) | Film kataloğu |
+|---|---|
+| ![Oda masaüstü](docs/screenshots/02-oda-masaustu.png) | ![Film kataloğu](docs/screenshots/03-film-katalogu.png) |
+| **Tam ekran: emoji ve kontroller** | **Tam ekran: köşelerde kameralar** |
+| ![Tam ekran emoji](docs/screenshots/04-tam-ekran-emoji.png) | ![Tam ekran kameralar](docs/screenshots/05-tam-ekran-kameralar.png) |
+
+**Tablet**
+
+![Tablet](docs/screenshots/06-tablet.png)
+
+**Mobil**
+
+| Ana sayfa | Oda | Özel kod ve şifre | Daha fazla menüsü |
+|---|---|---|---|
+| <img src="docs/screenshots/10-mobil-ana-sayfa.png" width="200"> | <img src="docs/screenshots/07-mobil-oda.png" width="200"> | <img src="docs/screenshots/08-mobil-ozel-kod.png" width="200"> | <img src="docs/screenshots/09-mobil-menu.png" width="200"> |
 
 ## Özellikler
 
