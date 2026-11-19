@@ -54,3 +54,5 @@ their own licenses:
 - hls.js (vendor/hls.min.js) — Apache License 2.0, see vendor/hls.LICENSE
 - @noble/curves / @noble/hashes (js/vendor/schnorr.js) — MIT License,
   Copyright (c) Paul Miller (https://paulmillr.com)
+- qrcode-generator (js/vendor/qrcode.js) — MIT License,
+  Copyright (c) Kazuhiko Arase

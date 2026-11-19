@@ -348,7 +348,7 @@ Geliştirme: `npm install` → `npm test` (link testleri) → `npm run build` (t
 
 ## Lisanslar
 
-CineSync kodu: MIT. Dahil edilen kütüphaneler: noble-curves (MIT), hls.js (Apache-2.0), qrcode-generator (MIT). İkon çizimleri Lucide (ISC) tarzındadır.
+CineSync kodu: tescilli, tüm hakları saklıdır (bkz. LICENSE). Dahil edilen üçüncü taraf kütüphaneler kendi lisanslarını korur: noble-curves (MIT), hls.js (Apache-2.0), qrcode-generator (MIT). İkon çizimleri Lucide (ISC) tarzındadır.
 
 ## Lisans
 
