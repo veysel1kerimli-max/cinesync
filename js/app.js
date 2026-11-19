@@ -6,7 +6,9 @@ import { Room, generateRoomCode, normalizeRoomCode, validateRoomCode, probeRoom 
 import { Mesh } from './rtc.js';
 import { Stage } from './stage.js';
 import { PipLayer } from './pip.js';
-import { $, $$, toast, copyText, escapeHtml, formatTime, clockTime, initials, colorFor } from './ui/dom.js';
+import { $, $$, toast, copyText, escapeHtml, formatTime, clockTime, initials, colorFor, timeAgo } from './ui/dom.js';
+import { ACCENTS, applyTheme, themePref, accentPref, effectiveTheme, setThemePref, setAccentPref, toggleTheme, onThemeChange } from './theme.js';
+import { qrSvg } from './qr.js';
 import { icon, hydrateIcons } from './ui/icons.js';
 
 const env = { hostname: location.hostname, protocol: location.protocol };
@@ -38,7 +40,13 @@ const S = {
   duckOn: store.get('duck', '1') === '1', speaking: new Set(), lastSpeakAt: 0,
   peerState: new Map(),         // peerId -> {state, quality}
   relays: { open: 0, total: 0 }, errors: [], lastErrToast: 0, hiddenAt: 0,
+  peerVol: store.json('peerVol', {}),   // üye adı -> ses düzeyi (0–1); cihazda hatırlanır
+  countdown: null,              // {id, at, by, timer}
+  subsSize: store.get('subsSize', 'm'), lastHostId: null, mentionIdx: 0, lastEndedKey: '',
 };
+const APP_VERSION = '2.4.0';
+const QUICK_REACTS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const CHAT_EMOJIS = ['😀', '😂', '🤣', '😍', '🥰', '😎', '🤔', '😮', '😢', '😡', '👍', '👏', '🙏', '🔥', '🎉', '❤️', '🍿', '🎬', '👀', '💯'];
 const MOBILE_MQ = '(max-width: 760px), (orientation: landscape) and (max-height: 520px)';
 const isMobileUI = () => matchMedia(MOBILE_MQ).matches;
 
@@ -207,8 +215,7 @@ function renderRecentRooms() {
   const rb = $('#rejoinBtn');
   if (rb) { rb.hidden = !(last && Date.now() - last.ts < 24 * 3600e3); if (last) { $('#rejoinCode').textContent = last.code; rb.dataset.room = last.code; } }
   $('#recentRooms').hidden = !list.length;
-  $('#recentRoomList').innerHTML = list.map((r) => `<button class="chip" type="button" data-room="${escapeHtml(r.code)}"><span data-icon="history"></span><span>${escapeHtml(r.code)}</span></button>`).join('');
-  hydrateIcons($('#recentRoomList'));
+  $('#recentRoomList').innerHTML = list.map((r) => `<span class="chip room-chip"><button type="button" class="rc-go" data-room="${escapeHtml(r.code)}" title="${escapeHtml(r.code)} odasına gir">${icon(r.locked ? 'lock' : 'history')}<span>${escapeHtml(r.code)}</span><small>${escapeHtml(timeAgo(r.ts))}</small></button><button type="button" class="rc-x" data-forget="${escapeHtml(r.code)}" aria-label="${escapeHtml(r.code)} odasını listeden kaldır" title="Listeden kaldır">${icon('x')}</button></span>`).join('');
 }
 function rememberRoom(code, locked = false) {
   const list = store.json('recentRooms', []).filter((r) => r.code !== code);
@@ -234,7 +241,13 @@ function initLobby() {
     const i = (PALETTE.indexOf(S.color) + (e.key === 'ArrowRight' ? 1 : -1) + PALETTE.length) % PALETTE.length;
     S.color = PALETTE[i]; store.set('color', S.color); renderColorPicker(); $(`[data-color="${S.color}"]`).focus();
   });
-  $('#recentRoomList').addEventListener('click', (e) => { const b = e.target.closest('[data-room]'); if (b) enterRoom(b.dataset.room, false); });
+  $('#recentRoomList').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-forget]');
+    if (x) { store.setJson('recentRooms', store.json('recentRooms', []).filter((r) => r.code !== x.dataset.forget)); renderRecentRooms(); toast('Oda listeden kaldırıldı.', 'info', 1800); return; }
+    const b = e.target.closest('[data-room]'); if (b) enterRoom(b.dataset.room, false);
+  });
+  $('#themeBtn').addEventListener('click', () => { toggleTheme(); });
+  for (const id of ['#whatsNewBtn', '#whatsNewLink']) $(id).addEventListener('click', (e) => { e.preventDefault(); $('#whatsNewDialog').showModal(); store.set('seenVersion', APP_VERSION); });
   $('#rejoinBtn').addEventListener('click', (e) => enterRoom(e.currentTarget.dataset.room, false));
   $('#lobbyMic').addEventListener('click', toggleMic);
   $('#lobbyCam').addEventListener('click', toggleCam);
@@ -327,6 +340,10 @@ function clearRoomContent() {
   $('#syncLabel').textContent = '';
   setReply(null); S.typing.clear(); renderTyping(); S.subsKey = ''; S.localSubs = false;
   $('#lockPill').hidden = true; $('#player').classList.remove('locked-out');
+  $('#backBtn').disabled = true;
+  cancelCountdown(false);
+  S.lastHostId = null; S.lastEndedKey = '';
+  renderQueue();
   setBadge?.('empty');
 }
 
@@ -431,7 +448,21 @@ function bindRoomEvents(room) {
     S.typing.delete(m.id); renderTyping();
     if (room.media?.locked && room.media.hostId === m.id) { room.media.locked = false; setLockUI(); addSystem('Kontrol kilidi açıldı (kilitleyen kişi ayrıldı).'); }
   });
-  room.on('media', (m) => applyMedia(m));
+  room.on('media', (m) => { applyMedia(m); renderQueue(); });
+  S.qPrevIds = new Set();
+  room.on('queue', (q, meta) => {
+    const prev = S.qPrevIds; S.qPrevIds = new Set(q.items.map((it) => it.id));
+    if (!meta?.local) {
+      const added = q.items.filter((it) => !prev.has(it.id));
+      const who = room.members.get(q.byId)?.name || 'Biri';
+      if (added.length === 1 && prev.size + 1 === q.items.length) addSystem(`${who} sıraya ekledi: ${added[0].title}`);
+      else if (added.length > 1) addSystem(`${who} sıraya ${added.length} öğe ekledi`);
+      else if (!q.items.length && prev.size) addSystem(`${who} sırayı temizledi`);
+    }
+    renderQueue();
+  });
+  room.on('chat-react', (msg) => renderReacts(msg));
+  room.on('countdown', (d, from) => onCountdown(d, from));
   room.on('tick', () => driftCheck(true));
   room.on('chat', renderChat);
   room.on('system', addSystem);
@@ -463,6 +494,12 @@ function bindRoomEvents(room) {
 // ======================================================= Oynatma durumu
 
 function applyMedia(m) {
+  const hostNow = m.locked && S.room.members.has(m.hostId) ? m.hostId : null;
+  if (hostNow !== S.lastHostId) {
+    if (hostNow === S.room.selfId && S.lastHostId && m.byId !== S.room.selfId) toast(`${m.byName} kontrolü sana devretti. Artık oynatmayı yalnızca sen yönetiyorsun.`, 'success', 5000);
+    S.lastHostId = hostNow;
+    if (S.room) renderMembers(S.room.memberList());
+  }
   if (m.label) {
     const who = m.byId === S.room.selfId ? 'Sen' : m.byName;
     $('#syncLabel').textContent = `${who} ${m.label}`;
@@ -571,9 +608,14 @@ function openSource(raw, label) {
   if (!src) return toast('Bu adres anlaşılamadı. Tam linki yapıştırmayı dene.', 'warn');
   openSrc(src, label);
 }
-function openSrc(src, label) {
+function openSrc(src, label, opts = {}) {
   if (!S.room) return;
   if (!canControl()) return deny();
+  // Elle açılan link sıradaki bir öğeyse onu "şimdi oynuyor" yap, değilse sıradaki işaret kalksın
+  if (!opts.fromQueue && S.room.queue?.items.length) {
+    const hit = S.room.queue.items.find((it) => it.url === src.url);
+    if ((hit?.id || null) !== S.room.queue.cur) S.room.setQueue({ cur: hit?.id || null });
+  }
   S.localSubs = false;
   if (S.screen) stopScreenShare(false);
   if (S.room.media?.src) {
@@ -619,6 +661,261 @@ function updateTransportUI() {
   if (S.fs && $('#player').classList.contains('idle') && controlsMustStay()) wakeControls();
   const pb = $('#playBtn');
   if (pb.dataset.state !== String(playing)) { setIcon(pb, playing ? 'pause' : 'play'); pb.dataset.state = String(playing); pb.setAttribute('aria-label', playing ? 'Duraklat' : 'Oynat'); }
+}
+
+// ======================================================= Ortak izleme sırası
+// Sıra odada herkesle paylaşılır. "cur" o an oynayan öğedir; Sonraki/Önceki ve video bitince otomatik geçiş buna göre çalışır.
+
+const qItems = () => S.room?.queue?.items || [];
+function qIndex() { const q = S.room?.queue; return q && q.cur ? q.items.findIndex((it) => it.id === q.cur) : -1; }
+function fileTitle(url) {
+  try {
+    const seg = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() || '');
+    const t = seg.replace(/\.(mp4|webm|m4v|mov|ogv|ogg|m3u8|mkv)$/i, '').replace(/[_+.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return t && t.length > 2 ? t.slice(0, 80) : '';
+  } catch { return ''; }
+}
+function queueLabel(src) {
+  if (src.title) return src.title;
+  if (src.kind === 'youtube') return 'YouTube videosu';
+  if (src.kind === 'vimeo') return 'Vimeo videosu';
+  if (src.kind === 'video') return fileTitle(src.url) || `${src.provider || 'Video'} · ${hostOf(src.url)}`;
+  return `${src.provider || 'Bağlantı'} · ${hostOf(src.url)}`;
+}
+/** YouTube / Vimeo başlığını resmî oEmbed uç noktasından alır (yalnızca başlık; 4 sn zaman aşımı) */
+async function fetchTitle(src) {
+  const u = src.kind === 'youtube' ? `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(src.url)}`
+    : src.kind === 'vimeo' ? `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(src.url)}` : '';
+  if (!u) return '';
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 4000);
+  try { const r = await fetch(u, { signal: ac.signal, credentials: 'omit' }); if (!r.ok) return ''; const j = await r.json(); return String(j.title || '').slice(0, 120); }
+  catch { return ''; } finally { clearTimeout(t); }
+}
+function makeItem(src, title) {
+  return { id: Math.random().toString(36).slice(2, 10), url: src.url, title: (title || queueLabel(src)).slice(0, 120), provider: src.provider || KIND_LABEL[src.kind] || '', by: S.room?.name || '' };
+}
+function addToQueue(srcOrRaw, title, { quiet = false } = {}) {
+  if (!S.room) return false;
+  if (!canControl()) return deny();
+  const src = typeof srcOrRaw === 'string' ? parseInput(srcOrRaw, env) : srcOrRaw;
+  if (!src || src.isSearch || !/^https?:\/\//i.test(src.url || '')) { toast('Sıraya yalnızca bir link (https://…) eklenebilir.', 'warn'); return false; }
+  const items = qItems();
+  if (items.length >= 50) { toast('Sıra dolu (en fazla 50 öğe).', 'warn'); return false; }
+  if (items.some((it) => it.url === src.url)) { toast('Bu link zaten sırada.', 'info', 2000); return false; }
+  const item = makeItem(src, title);
+  // Hiçbir şey oynamıyorsa ve sıra boşsa doğrudan başlat
+  const idle = !S.room.media?.src && !S.room.media?.screen && !items.length;
+  S.room.setQueue({ items: [...items, item], cur: idle ? item.id : S.room.queue?.cur || null });
+  if (idle) { openSrc(src, `sıradan başlattı: ${item.title}`, { fromQueue: true }); refineTitle(src, item, title); return true; }
+  if (!quiet) toast(`Sıraya eklendi: ${item.title}`, 'success', 3500, { action: { label: 'Geri al', fn: () => removeFromQueue(item.id) } });
+  refineTitle(src, item, title);
+  return true;
+}
+function refineTitle(src, item, title) {
+  if (title || src.title || (src.kind !== 'youtube' && src.kind !== 'vimeo')) return;
+  const room = S.room;
+  fetchTitle(src).then((t) => {
+    if (!t || S.room !== room || !canControl()) return;
+    const items = qItems(); const i = items.findIndex((x) => x.id === item.id);
+    if (i < 0 || items[i].title !== item.title) return;
+    S.room.setQueue({ items: items.map((x) => (x.id === item.id ? { ...x, title: t } : x)) });
+  });
+}
+function removeFromQueue(id) {
+  if (!S.room || !canControl()) return deny();
+  const items = qItems().filter((it) => it.id !== id);
+  S.room.setQueue({ items, cur: S.room.queue?.cur === id ? null : S.room.queue?.cur });
+}
+function moveInQueue(id, dir) {
+  if (!S.room || !canControl()) return deny();
+  const items = [...qItems()];
+  const i = items.findIndex((it) => it.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= items.length) return;
+  [items[i], items[j]] = [items[j], items[i]];
+  S.room.setQueue({ items });
+  requestAnimationFrame(() => $(`#queueList li[data-qid="${CSS.escape(id)}"] [data-qmove="${dir}"]`)?.focus());
+}
+function playQueueItem(id, why = '') {
+  if (!S.room) return;
+  if (!canControl()) return deny();
+  const it = qItems().find((x) => x.id === id); if (!it) return;
+  const src = parseInput(it.url, env);
+  if (!src) return toast('Bu öğe açılamadı.', 'warn');
+  if (it.title) src.title = src.title || it.title;
+  S.room.setQueue({ cur: id });
+  openSrc(src, `${why || 'sıradan açtı'}: ${it.title}`, { fromQueue: true });
+}
+function queueStep(dir, auto = false) {
+  const items = qItems();
+  if (!items.length) { if (!auto) toast('Sırada başka öğe yok. “Sıra” sekmesinden ekleyebilirsin.', 'info', 2500); return false; }
+  const i = qIndex();
+  const j = i < 0 ? (dir > 0 ? 0 : -1) : i + dir;
+  if (j < 0 || j >= items.length) { if (!auto) toast(dir > 0 ? 'Sıranın sonuna geldiniz.' : 'Sıranın başındasınız.', 'info', 2000); return false; }
+  playQueueItem(items[j].id, auto ? 'sıradakine geçti' : dir > 0 ? 'sıradakine geçti' : 'öncekine döndü');
+  return true;
+}
+/** Video bitti: yalnızca son işlemi yapan kişi (o yoksa odadaki en eski üye) sıradakini başlatır; böylece tek komut gider */
+function onMediaEnded() {
+  const room = S.room;
+  if (!room?.media?.src || !room.queue?.auto) return;
+  const key = `${room.media.ver}|${room.media.src.url}`;
+  if (S.lastEndedKey === key) return;
+  const items = qItems(), i = qIndex();
+  const next = items[i + 1];
+  if (!next) return;
+  const authority = room.members.has(room.media.byId) ? room.media.byId : room.memberList()[0]?.id;
+  const md = room.media;
+  const host = md.locked && room.members.has(md.hostId) ? md.hostId : null;
+  if ((host || authority) !== room.selfId) return;
+  S.lastEndedKey = key;
+  toast(`Sıradaki başlıyor: ${next.title}`, 'info', 2500);
+  setTimeout(() => { if (S.room === room && room.media && `${room.media.ver}|${room.media.src?.url}` === key) queueStep(1, true); }, 1500);
+}
+function renderQueueBadge() {
+  const n = qItems().length;
+  const c = $('#queueCount'); c.textContent = n; c.hidden = !n;
+  $('#sheetQueue').textContent = n;
+}
+function renderQueue() {
+  const items = qItems();
+  const cur = qIndex();
+  renderQueueBadge();
+  $('#queueEmpty').hidden = !!items.length;
+  $('#queueClear').hidden = !items.length;
+  $('#queueAuto').checked = S.room?.queue ? S.room.queue.auto !== false : true;
+  const locked = !canControl();
+  const ol = $('#queueList');
+  const focusId = document.activeElement?.closest?.('#queueList li')?.dataset.qid;
+  ol.innerHTML = items.map((it, i) => `<li data-qid="${escapeHtml(it.id)}" class="${i === cur ? 'cur' : i < cur ? 'done' : ''}">
+    <button type="button" class="q-main" data-qplay="${escapeHtml(it.id)}" ${locked ? 'disabled' : ''} title="${escapeHtml(it.url)}" aria-label="${escapeHtml(it.title)} — şimdi oynat">
+      <span class="q-n">${i === cur ? icon('play') : i + 1}</span>
+      <span class="q-t"><b>${escapeHtml(it.title)}</b><small>${escapeHtml([i === cur ? 'Şimdi oynuyor' : '', it.provider, it.by ? `${it.by} ekledi` : ''].filter(Boolean).join(' · '))}</small></span>
+    </button>
+    <span class="q-acts">
+      <button type="button" class="mini-btn" data-qmove="-1" data-qid-btn="${escapeHtml(it.id)}" aria-label="Yukarı taşı" title="Yukarı" ${i === 0 || locked ? 'disabled' : ''}>${icon('chevronUp')}</button>
+      <button type="button" class="mini-btn" data-qmove="1" data-qid-btn="${escapeHtml(it.id)}" aria-label="Aşağı taşı" title="Aşağı" ${i === items.length - 1 || locked ? 'disabled' : ''}>${icon('chevronDown')}</button>
+      <button type="button" class="mini-btn" data-qdel="${escapeHtml(it.id)}" aria-label="Sıradan kaldır" title="Kaldır" ${locked ? 'disabled' : ''}>${icon('x')}</button>
+    </span></li>`).join('');
+  if (focusId) ol.querySelector(`li[data-qid="${CSS.escape(focusId)}"] .q-main`)?.focus({ preventScroll: true });
+  // Taşıma düğmeleri: Sonraki / Önceki
+  const hasNext = items.length > 0 && cur < items.length - 1;
+  const hasPrev = cur > 0;
+  $('#nextBtn').hidden = !hasNext; $('#prevBtn').hidden = !hasPrev;
+  if (hasNext) $('#nextBtn').title = `Sıradaki: ${items[cur + 1].title} (N)`;
+}
+
+// ======================================================= 3-2-1 geri sayım
+// Başlatan kişi oynatmayı duraklatır ve herkese "şu anda başla" zamanını gönderir. Herkes geri sayımı kendi saatine
+// çevirerek (NTP benzeri saat farkı) aynı anda görür; sıfırda başlatan "oynat" komutunu yollar.
+const CD_MS = 3000;
+function startCountdown() {
+  const room = S.room;
+  if (!room) return;
+  if (S.countdown) { room.send('countdown', { id: S.countdown.id, cancel: true }); cancelCountdown(true); return; }
+  if (!canControl()) return deny();
+  if (!room.media?.src && !room.media?.screen) return toast('Önce bir video aç; sonra geri sayımla herkesle aynı anda başlatın.', 'info', 3500);
+  const id = Math.random().toString(36).slice(2, 10);
+  const at = Date.now() + CD_MS;
+  if (S.stage.controllable && room.media.playing) room.setMedia({ playing: false, time: S.stage.getTime() }, 'geri sayım başlattı');
+  room.send('countdown', { id, at, name: room.name });
+  runCountdown({ id, at, by: room.selfId, name: 'Sen' });
+}
+function onCountdown(d, from) {
+  if (!d || typeof d.id !== 'string') return;
+  if (d.cancel) { if (S.countdown?.id === d.id) { cancelCountdown(false); toast(`${S.room.members.get(from)?.name || 'Biri'} geri sayımı iptal etti.`, 'info', 2000); } return; }
+  const local = S.room.localTimeOf(from, Number(d.at));
+  const now = Date.now();
+  const at = local !== null && local > now - 500 && local < now + 8000 ? local : now + CD_MS;
+  runCountdown({ id: d.id, at, by: from, name: S.room.members.get(from)?.name || String(d.name || 'Biri').slice(0, 24) });
+}
+function runCountdown(cd) {
+  cancelCountdown(false);
+  S.countdown = cd;
+  const box = $('#countdown');
+  box.hidden = false;
+  $('#cdSub').textContent = `${cd.name} geri sayımı başlattı · hazır olun`;
+  $('#countdownBtn').classList.add('on');
+  if (S.fs) wakeControls();
+  let last = null;
+  const tick = () => {
+    if (S.countdown !== cd) return;
+    const left = cd.at - Date.now();
+    if (left <= 0) {
+      $('#cdNum').textContent = 'Başla!';
+      box.classList.add('go');
+      $('#cdSub').textContent = S.stage.controllable ? 'İyi seyirler!' : 'Şimdi herkes oynat’a bassın!';
+      if (cd.by === S.room?.selfId && S.room.media && S.stage.controllable) S.room.setMedia({ playing: true, time: S.stage.getTime() }, 'geri sayımla başlattı');
+      cd.timer = setTimeout(() => { if (S.countdown === cd) cancelCountdown(false); }, 1100);
+      return;
+    }
+    const n = Math.ceil(left / 1000);
+    if (n !== last) { last = n; $('#cdNum').textContent = String(n); box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); ping(); }
+    cd.timer = setTimeout(tick, Math.min(100, left));
+  };
+  tick();
+}
+function cancelCountdown(announce) {
+  const cd = S.countdown;
+  if (cd) clearTimeout(cd.timer);
+  S.countdown = null;
+  const box = $('#countdown'); if (box) { box.hidden = true; box.classList.remove('go', 'pop'); }
+  $('#countdownBtn')?.classList.remove('on');
+  if (announce && cd) toast('Geri sayım iptal edildi.', 'info', 1800);
+}
+
+// ======================================================= Davet (QR kod)
+function openInvite() {
+  if (!S.room) return;
+  const link = inviteLink(S.room.code);
+  const text = `Birlikte izleyelim! CineSync oda kodu: ${S.room.code}`;
+  $('#invCode').textContent = S.room.code;
+  $('#invLink').value = link;
+  $('#invPass').hidden = !S.room.password;
+  try { $('#qrBox').innerHTML = qrSvg(link); } catch { $('#qrBox').innerHTML = '<p class="muted tiny">QR kod üretilemedi.</p>'; }
+  $('#invWa').href = `https://wa.me/?text=${encodeURIComponent(`${text} ${link}`)}`;
+  $('#invTg').href = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+  $('#invMail').href = `mailto:?subject=${encodeURIComponent('CineSync daveti')}&body=${encodeURIComponent(`${text}\n${link}`)}`;
+  $('#invShare').hidden = !navigator.share;
+  if (S.fs) exitFullscreen();
+  closePops();
+  $('#inviteDialog').showModal();
+  $('#invCopy').focus();
+}
+
+// ======================================================= Altyazı zamanlaması ve boyutu (yalnızca bu cihazda)
+function shiftSubs(delta) {
+  if (!S.stage.hasSubtitles) return toast('Önce bir altyazı ekle.', 'info', 2000);
+  const v = delta === 0 ? 0 : S.stage.subsOffset + delta;
+  const off = S.stage.setSubtitleOffset(v);
+  $('#subsOffVal').textContent = `${off > 0 ? '+' : ''}${off.toFixed(1).replace('.', ',')} sn`;
+}
+function setSubsSize(sz) {
+  S.subsSize = ['s', 'm', 'l'].includes(sz) ? sz : 'm';
+  store.set('subsSize', S.subsSize);
+  const v = $('#stageVideo');
+  v.classList.remove('subs-s', 'subs-m', 'subs-l'); v.classList.add('subs-' + S.subsSize);
+  $$('#subsSize [data-subs-size]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.subsSize === S.subsSize)));
+}
+function updateSubsTune() {
+  const on = S.stage.hasSubtitles;
+  $('#subsTune').classList.toggle('disabled', !on);
+  const off = S.stage.subsOffset || 0;
+  $('#subsOffVal').textContent = `${off > 0 ? '+' : ''}${off.toFixed(1).replace('.', ',')} sn`;
+}
+
+// ======================================================= Görünüm (tema, vurgu rengi)
+function renderAppearance() {
+  const pref = themePref();
+  $$('#themeSeg [data-theme-opt]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.themeOpt === pref)));
+  const acc = accentPref();
+  $('#accentPicker').innerHTML = ACCENTS.map((a) => `<button type="button" class="swatch" role="radio" aria-checked="${a.id === acc}" aria-label="${a.label}" title="${a.label}" style="--c:${a.c}" data-accent="${a.id}"></button>`).join('');
+}
+function updateThemeLabels(theme = effectiveTheme()) {
+  const next = theme === 'light' ? 'Koyu tema' : 'Açık tema';
+  const ic = theme === 'light' ? 'moon' : 'sun';
+  for (const el of [$('#themeMenuLabel'), $('#sheetThemeLabel')]) if (el) el.textContent = next;
+  for (const b of [$('[data-menu=theme]'), $('[data-sheet=theme]'), $('#themeBtn')]) if (b) setIcon(b, ic);
+  $('#themeBtn')?.setAttribute('aria-label', `${next}ya geç`);
 }
 
 // ======================================================= Ekran paylaşımı
@@ -667,9 +964,18 @@ function camStreamOf(m) {
   if (streams) for (const [sid, st] of streams) if (sid !== m.screenStreamId) cam = st;
   return cam;
 }
+function peerVolume(m) { const v = Number(S.peerVol[m?.name]); return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1; }
 function applyRemoteMute(m) {
   const muted = S.muteRemote || S.mutedPeers.has(m.id);
-  for (const a of (S.audioEls.get(m.id) || new Map()).values()) a.muted = muted;
+  const vol = peerVolume(m);
+  for (const a of (S.audioEls.get(m.id) || new Map()).values()) { a.muted = muted; try { a.volume = vol; } catch {} }
+}
+function setPeerVolume(id, v) {
+  const m = S.room?.members.get(id); if (!m) return;
+  S.peerVol[m.name] = Math.round(v * 100) / 100;
+  if (S.peerVol[m.name] === 1) delete S.peerVol[m.name];
+  store.setJson('peerVol', S.peerVol);
+  applyRemoteMute(m);
 }
 // Uzak ses, görüntüden ayrı, sade <audio> öğeleriyle çalınır:
 //  • Mobil tarayıcılar arka plandaki <video> öğelerini duraklatabilir; <audio> çalmaya devam eder.
@@ -784,45 +1090,173 @@ function updateQuality(id) {
   const tile = document.getElementById('tile-' + id);
   if (tile) { tile.dataset.q = q; tile.querySelector('.q')?.setAttribute('title', Q_LABEL[q] || ''); tile.classList.toggle('away', !!m.away); }
   const li = $(`#memberList li[data-id="${CSS.escape(id)}"]`);
-  if (li) { li.dataset.q = q; const qs = li.querySelector('.q'); if (qs) { qs.title = Q_LABEL[q] || ''; qs.setAttribute('aria-label', Q_LABEL[q] || ''); } const st = li.querySelector('.st'); if (st) st.textContent = m.away ? 'arka planda' : m.hidden ? 'başka sekmede' : ''; }
+  if (li) { li.dataset.q = q; const qs = li.querySelector('.q'); if (qs) { const t = qualityText(m); qs.title = t; qs.setAttribute('aria-label', t); } const st = li.querySelector('.st'); if (st) st.textContent = m.away ? 'arka planda' : m.hidden ? 'başka sekmede' : ''; }
 }
+/** Bağlantı kalitesi + ölçülen gecikme (varsa): "Bağlantı iyi · 42 ms" */
+function qualityText(m) {
+  const q = qualityOf(m);
+  const rtt = S.mesh?.info?.(m.id)?.rtt;
+  return (Q_LABEL[q] || '') + (Number.isFinite(rtt) && q !== 'down' && q !== 'away' ? ` · ${Math.round(rtt)} ms` : '');
+}
+function memberHtml(m, host) {
+  const md = S.room?.media;
+  const iAmHost = host && host === S.room.selfId;
+  const isHost = host === m.id;
+  const vol = Math.round(peerVolume(m) * 100);
+  return `<span class="av" style="background:${memberColor(m)}">${escapeHtml(initials(m.name))}</span>
+    <span class="nm">${isHost ? `<span class="crown" title="Oda sahibi (kontrol onda)">${icon('crown')}</span>` : ''}${escapeHtml(m.name)}${m.self ? ' <span class="muted">(sen)</span>' : ''} <small class="st muted">${m.away ? 'arka planda' : m.hidden ? 'başka sekmede' : ''}</small></span>
+    ${m.self ? '' : `<span class="q" role="img" aria-label="${escapeHtml(qualityText(m))}" title="${escapeHtml(qualityText(m))}"><i></i><i></i><i></i></span>`}
+    <span class="sr-only">${m.mic ? 'mikrofon açık' : 'mikrofon kapalı'}, ${m.cam ? 'kamera açık' : 'kamera kapalı'}</span>
+    ${icon(m.mic ? 'mic' : 'micOff', m.mic ? 'on' : '')}${icon(m.cam ? 'cam' : 'camOff', m.cam ? 'on' : '')}
+    ${m.self ? '' : `<div class="m-row">
+      <label class="pvol" title="${escapeHtml(m.name)} ses düzeyi">${icon(vol ? 'volume' : 'volumeOff')}<input type="range" min="0" max="100" step="5" value="${vol}" data-vol-id="${escapeHtml(m.id)}" aria-label="${escapeHtml(m.name)} ses düzeyi"><output>${vol}%</output></label>
+      ${iAmHost && md?.locked ? `<button type="button" class="mini-btn handover" data-handover="${escapeHtml(m.id)}" title="Kontrolü ${escapeHtml(m.name)} kişisine devret" aria-label="Kontrolü ${escapeHtml(m.name)} kişisine devret">${icon('crown')}<span>Devret</span></button>` : ''}
+    </div>`}`;
+}
+/** Kişi listesi: her kalp atışında yeniden çizmek kaydırıcıyı/odaklanmayı bozardı; yalnızca değişen satır güncellenir */
 function renderMembers(list) {
   $('#memberCount').textContent = list.length;
   $('#sheetCount').textContent = list.length;
-  $('#memberList').innerHTML = list.map((m) => `
-    <li data-id="${escapeHtml(m.id)}" data-q="${qualityOf(m)}"><span class="av" style="background:${memberColor(m)}">${escapeHtml(initials(m.name))}</span>
-    <span class="nm">${escapeHtml(m.name)}${m.self ? ' <span class="muted">(sen)</span>' : ''} <small class="st muted">${m.away ? 'arka planda' : m.hidden ? 'başka sekmede' : ''}</small></span>
-    ${m.self ? '' : `<span class="q" role="img" aria-label="${escapeHtml(Q_LABEL[qualityOf(m)] || '')}" title="${escapeHtml(Q_LABEL[qualityOf(m)] || '')}"><i></i><i></i><i></i></span>`}
-    <span class="sr-only">${m.mic ? 'mikrofon açık' : 'mikrofon kapalı'}, ${m.cam ? 'kamera açık' : 'kamera kapalı'}</span>
-    ${icon(m.mic ? 'mic' : 'micOff', m.mic ? 'on' : '')}${icon(m.cam ? 'cam' : 'camOff', m.cam ? 'on' : '')}</li>`).join('');
+  const ul = $('#memberList');
+  const md = S.room?.media;
+  const host = md && md.locked && S.room?.members.has(md.hostId) ? md.hostId : null;
+  const keep = new Set(list.map((m) => m.id));
+  for (const li of [...ul.children]) if (!keep.has(li.dataset.id)) li.remove();
+  list.forEach((m, i) => {
+    const html = memberHtml(m, host);
+    let li = ul.querySelector(`li[data-id="${CSS.escape(m.id)}"]`);
+    if (!li) { li = document.createElement('li'); li.dataset.id = m.id; }
+    if (ul.children[i] !== li) ul.insertBefore(li, ul.children[i] || null);
+    li.dataset.q = qualityOf(m);
+    li.classList.toggle('is-host', host === m.id);
+    if (li._html !== html && !li.contains(document.activeElement)) { li.innerHTML = html; li._html = html; }
+  });
   for (const m of list) if (!m.self) { ensureTile(m); updateQuality(m.id); }
   refreshRemoteMedia();
+}
+function handOver(id) {
+  const md = S.room?.media, m = S.room?.members.get(id);
+  if (!m || !md?.locked || md.hostId !== S.room.selfId) return;
+  S.room.setMedia({ locked: true, hostId: id }, `kontrolü ${m.name} kişisine devretti`);
+  toast(`Kontrol ${m.name} kişisine devredildi.`, 'success', 3000);
+  renderMembers(S.room.memberList());
 }
 
 // ======================================================= Sohbet
 
 function clearChatEmpty() { $('#chatList .chat-empty')?.remove(); }
 function chatVisible() { return !document.hidden && (S.tab === 'chat' || false) && !$('#roomView').hidden && !(S.fs); }
+const normName = (n) => String(n || '').toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim();
+/** Mesaj beni anıyor mu? "@Veysel" ya da çok kelimeli adın tamamı ("@Misafir 123") */
+function mentionsMe(text) {
+  if (!S.room) return false;
+  const me = normName(S.room.name);
+  const t = normName(text);
+  if (!me) return false;
+  if (t.includes('@' + me)) return true;
+  const first = me.split(' ')[0];
+  return first.length >= 2 && new RegExp(`(^|\\s)@${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(t);
+}
+/** Bağlantıları tıklanabilir yapar, @bahsetmeleri vurgular */
+function formatChat(text) {
+  return linkify(text).replace(/(^|\s)@([\p{L}\p{N}_.-]{1,24})/gu, (m0, sp, name) => `${sp}<span class="mention">@${name}</span>`);
+}
 function renderChat(msg) {
   clearChatEmpty();
   const list = $('#chatList');
   const mine = msg.fromId === S.room?.selfId;
   const el = document.createElement('div');
-  el.className = 'msg' + (mine ? ' mine' : '');
+  const atMe = !mine && mentionsMe(msg.text);
+  el.className = 'msg' + (mine ? ' mine' : '') + (atMe ? ' mentioned' : '');
   el.dataset.id = msg.id || '';
   const q = msg.reply && typeof msg.reply === 'object' ? `<a class="quote" href="#" data-goto="${escapeHtml(String(msg.reply.id || ''))}">↪ <b>${escapeHtml(String(msg.reply.name || ''))}</b>: ${escapeHtml(String(msg.reply.text || ''))}</a>` : '';
-  el.innerHTML = `<div class="meta"><b>${escapeHtml(mine ? 'Sen' : msg.name)}</b> · ${clockTime(msg.ts)}</div><div class="bubble">${q}${linkify(msg.text)}</div><button type="button" class="reply-btn" aria-label="Yanıtla" title="Yanıtla">${icon('reply')}</button>`;
-  el.querySelector('.reply-btn').addEventListener('click', () => setReply({ id: msg.id, name: mine ? S.room.name : msg.name, text: msg.text }));
+  el.innerHTML = `<div class="meta"><b>${escapeHtml(mine ? 'Sen' : msg.name)}</b> · ${clockTime(msg.ts)}</div><div class="bubble">${q}${formatChat(msg.text)}</div>
+    <div class="msg-acts"><button type="button" class="react-btn" data-react-open aria-label="Tepki ekle" title="Tepki ekle">${icon('smilePlus')}</button><button type="button" class="reply-btn" data-reply aria-label="Yanıtla" title="Yanıtla">${icon('reply')}</button></div>
+    <div class="reacts" role="group" aria-label="Tepkiler"></div>`;
+  el.querySelector('[data-reply]').addEventListener('click', () => setReply({ id: msg.id, name: mine ? S.room.name : msg.name, text: msg.text }));
   if (!mine && S.typing.has(msg.fromId)) { clearTimeout(S.typing.get(msg.fromId).t); S.typing.delete(msg.fromId); renderTyping(); }
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   list.appendChild(el);
+  renderReacts(msg);
   if (nearBottom || mine) list.scrollTop = list.scrollHeight;
   if (!mine) {
     if (!chatVisible()) { S.unread++; for (const b of [$('#unread'), $('#mUnread')]) { b.textContent = S.unread > 99 ? '99+' : S.unread; b.hidden = false; } updateTitle(); }
-    if (document.hidden || !chatVisible()) ping();
-    if (S.fs && S.chatToasts) toast(`${msg.name}: ${msg.text.slice(0, 80)}`, 'info', 3000);
+    if (document.hidden || !chatVisible() || atMe) ping();
+    if (atMe && (!chatVisible() || S.fs)) toast(`${msg.name} senden bahsetti: ${msg.text.slice(0, 80)}`, 'info', 5000, { action: { label: 'Göster', fn: () => { if (S.fs) exitFullscreen(); switchTab('chat'); el.scrollIntoView({ block: 'center' }); } } });
+    else if (S.fs && S.chatToasts) toast(`${msg.name}: ${msg.text.slice(0, 80)}`, 'info', 3000);
   }
 }
+/** Bir mesajın altındaki tepki çiplerini (👍 2) çizer */
+function renderReacts(msg) {
+  const el = $(`#chatList .msg[data-id="${CSS.escape(msg.id || '')}"] .reacts`);
+  if (!el || !S.room) return;
+  const r = msg.reacts || {};
+  const names = (ids) => ids.map((id) => id === S.room.selfId ? 'Sen' : S.room.members.get(id)?.name || 'biri').join(', ');
+  el.innerHTML = Object.entries(r).filter(([, ids]) => ids.length).map(([e, ids]) => {
+    const minePressed = ids.includes(S.room.selfId);
+    return `<button type="button" class="react-chip" data-react="${escapeHtml(e)}" aria-pressed="${minePressed}" title="${escapeHtml(names(ids))}" aria-label="${escapeHtml(e)} tepkisi, ${ids.length} kişi${minePressed ? ', sen de dahil' : ''}">${escapeHtml(e)}<b>${ids.length}</b></button>`;
+  }).join('');
+  el.hidden = !el.childElementCount;
+}
+function toggleReact(id, e) {
+  const msg = S.room?.chat.find((m) => m.id === id); if (!msg) return;
+  const on = !(msg.reacts?.[e] || []).includes(S.room.selfId);
+  S.room.reactChat(id, e, on);
+}
+function openReactPicker(msgEl) {
+  closeReactPicker();
+  const pick = document.createElement('div');
+  pick.className = 'react-pick';
+  pick.setAttribute('role', 'group'); pick.setAttribute('aria-label', 'Tepki seç');
+  pick.innerHTML = QUICK_REACTS.map((e) => `<button type="button" data-pick="${e}" aria-label="${e} tepkisi">${e}</button>`).join('');
+  msgEl.appendChild(pick);
+  pick.querySelector('button').focus({ preventScroll: true });
+}
+function closeReactPicker() { $$('#chatList .react-pick').forEach((x) => x.remove()); }
+
+// ---- @bahsetme önerileri
+function mentionQuery() {
+  const inp = $('#chatInput');
+  const before = inp.value.slice(0, inp.selectionStart ?? inp.value.length);
+  const m = before.match(/(?:^|\s)@([\p{L}\p{N}_.-]{0,24})$/u);
+  return m ? { q: m[1], start: before.length - m[1].length - 1 } : null;
+}
+function updateMentions() {
+  const box = $('#mentionList');
+  const mq = S.room ? mentionQuery() : null;
+  const others = S.room ? S.room.memberList().filter((m) => !m.self) : [];
+  const hits = mq ? others.filter((m) => normName(m.name).startsWith(normName(mq.q)) || normName(m.name).includes(' ' + normName(mq.q))).slice(0, 6) : [];
+  if (!hits.length) { box.hidden = true; box._hits = []; $('#chatInput').removeAttribute('aria-activedescendant'); return; }
+  S.mentionIdx = Math.min(S.mentionIdx, hits.length - 1);
+  box._hits = hits; box._q = mq;
+  box.innerHTML = hits.map((m, i) => `<button type="button" role="option" id="mention-${i}" data-mention="${i}" aria-selected="${i === S.mentionIdx}"><span class="av" style="background:${memberColor(m)}">${escapeHtml(initials(m.name))}</span>${escapeHtml(m.name)}</button>`).join('');
+  box.hidden = false;
+  $('#chatInput').setAttribute('aria-activedescendant', `mention-${S.mentionIdx}`);
+}
+function pickMention(i) {
+  const box = $('#mentionList'), m = box._hits?.[i], mq = box._q;
+  if (!m || !mq) return;
+  const inp = $('#chatInput');
+  const end = inp.selectionStart ?? inp.value.length;
+  inp.value = inp.value.slice(0, mq.start) + '@' + m.name + ' ' + inp.value.slice(end);
+  const pos = mq.start + m.name.length + 2;
+  inp.setSelectionRange(pos, pos); inp.focus();
+  box.hidden = true; S.mentionIdx = 0;
+}
+function toggleChatEmoji(force) {
+  const pop = $('#chatEmojiPop');
+  const open = force ?? pop.hidden;
+  if (open && !pop.childElementCount) pop.innerHTML = CHAT_EMOJIS.map((e) => `<button type="button" data-ins="${e}" aria-label="${e} ekle">${e}</button>`).join('');
+  pop.hidden = !open;
+  $('#chatEmojiBtn').setAttribute('aria-expanded', String(open));
+}
+function insertAtCaret(inp, text) {
+  const a = inp.selectionStart ?? inp.value.length, b = inp.selectionEnd ?? a;
+  inp.value = (inp.value.slice(0, a) + text + inp.value.slice(b)).slice(0, 1000);
+  const p = Math.min(inp.value.length, a + text.length);
+  inp.setSelectionRange(p, p);
+}
+
 function setReply(r) {
   S.replyTo = r;
   $('#replyBar').hidden = !r;
@@ -855,6 +1289,7 @@ function switchTab(tab) {
   $('#tab-chat').hidden = tab !== 'chat';
   $('#tab-members').hidden = tab !== 'members';
   $('#tab-cams').hidden = tab !== 'cams';
+  $('#tab-queue').hidden = tab !== 'queue';
   if (tab === 'chat') { S.unread = 0; $('#unread').hidden = true; $('#mUnread').hidden = true; updateTitle(); const l = $('#chatList'); l.scrollTop = l.scrollHeight; }
 }
 
@@ -1034,11 +1469,21 @@ function menuAction(act) {
   if (act === 'sound') { S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); updateSoundLabel(); toast(S.sound ? 'Bildirim sesi açık.' : 'Bildirim sesi kapalı.', 'info', 1800); }
   if (act === 'muteRemote') setMuteRemote(!S.muteRemote);
   if (act === 'help') $('#helpDialog').showModal();
+  if (act === 'queue') showQueue();
+  if (act === 'countdown') startCountdown();
+  if (act === 'theme') toggleTheme();
   if (act === 'leave') leaveRoom();
 }
 function updateSoundLabel() {
   const l = $('#soundLabel'); if (l) l.textContent = `Bildirim sesi: ${S.sound ? 'açık' : 'kapalı'}`;
   const b = $('[data-menu=sound]'); if (b) setIcon(b, S.sound ? 'bell' : 'bellOff');
+}
+function cyclePipSize() { const s = S.pip.cycleSize(); toast(`Kamera boyutu: ${{ s: 'küçük', m: 'orta', l: 'büyük' }[s]}`, 'info', 1500); }
+function showQueue() {
+  if (S.fs) exitFullscreen();
+  if ($('#roomView').classList.contains('theater')) toggleTheater();
+  switchTab('queue');
+  setTimeout(() => { if (matchMedia('(pointer: fine)').matches) $('#queueInput').focus(); }, 50);
 }
 function onKey(e) {
   if (!S.room || $('#roomView').hidden) return;
@@ -1052,7 +1497,7 @@ function onKey(e) {
     if (e.key.toLowerCase() === 'e') { e.preventDefault(); return toggleCam(); }
     return;
   }
-  if (isTyping(e) || e.altKey || $('#helpDialog').open || $('#catalogDialog').open || $('#settingsDialog').open) return;
+  if (isTyping(e) || e.altKey || document.querySelector('dialog[open]')) return;
   if (S.fs) wakeControls();
   const QUICK = ['😂', '😍', '😮', '👏', '🔥', '😢'];
   if (/^[1-6]$/.test(e.key) && !e.target.closest?.('input')) { e.preventDefault(); return sendReaction(QUICK[Number(e.key) - 1]); }
@@ -1061,10 +1506,12 @@ function onKey(e) {
     ' ': () => transport('toggle'), k: () => transport('toggle'), K: () => transport('toggle'),
     ArrowLeft: () => transport('rew'), ArrowRight: () => transport('fwd'),
     f: toggleFullscreen, F: toggleFullscreen, v: toggleCamsHidden, V: toggleCamsHidden,
-    b: () => { const s = S.pip.cycleSize(); toast(`Kamera boyutu: ${{ s: 'küçük', m: 'orta', l: 'büyük' }[s]}`, 'info', 1500); }, B: () => S.pip.cycleSize(),
+    b: cyclePipSize, B: cyclePipSize,
     t: toggleTheater, T: toggleTheater, m: () => $('#muteBtn').click(), M: () => $('#muteBtn').click(),
     l: toggleLaser, L: toggleLaser, '/': () => { if (S.fs) exitFullscreen(); $('#urlInput').focus(); }, '?': () => $('#helpDialog').showModal(),
     s: openCatalog, S: openCatalog,
+    n: () => queueStep(1), N: () => queueStep(1), p: () => queueStep(-1), P: () => queueStep(-1),
+    q: showQueue, Q: showQueue, g: startCountdown, G: startCountdown, i: openInvite, I: openInvite,
     e: () => togglePop($('#emojiPop'), [$('#emojiBtn'), $('#fsEmojiBtn'), $('#fsEmojiFloat')].find((b) => b.offsetParent !== null)),
     E: () => togglePop($('#emojiPop'), [$('#emojiBtn'), $('#fsEmojiBtn'), $('#fsEmojiFloat')].find((b) => b.offsetParent !== null)),
     Enter: () => { if (S.fs) return; if (!isDesktop()) switchTab('chat'); $('#chatInput').focus(); },
@@ -1152,10 +1599,12 @@ function siteCard(s) {
     </div></article>`;
 }
 function filmCard(f, i) {
-  return `<button class="film" type="button" data-film="${i}" title="${escapeHtml(f.title)} (${f.year})">
+  const queued = qItems().some((it) => it.url === f.url);
+  return `<div class="film-wrap"><button class="film" type="button" data-film="${i}" title="${escapeHtml(f.title)} (${f.year}) — herkeste şimdi aç">
     <span class="play-ic">${icon('play')}</span><b>${escapeHtml(f.title)}</b>
     <span class="meta">${f.year} · ${f.min} dk · ${escapeHtml(f.genre)}</span>
-    <span class="bdg lic">${escapeHtml(LICENSE_LABEL[f.lic] || '')}</span></button>`;
+    <span class="bdg lic">${escapeHtml(LICENSE_LABEL[f.lic] || '')}</span></button>
+    <button class="film-q${queued ? ' on' : ''}" type="button" data-film-q="${i}" aria-label="${escapeHtml(f.title)} filmini sıraya ekle" title="${queued ? 'Sırada' : 'Sıraya ekle'}" ${queued ? 'aria-pressed="true"' : ''}>${icon(queued ? 'check' : 'listPlus')}</button></div>`;
 }
 function renderCatalog() {
   const q = $('#catSearch').value.trim().toLocaleLowerCase('tr');
@@ -1184,6 +1633,14 @@ function onCatalogClick(e) {
   if (e.target.closest('[data-close]')) return $('#catalogDialog').close();
   const cat = e.target.closest('[data-cat]');
   if (cat) { S.catFilter = cat.dataset.cat; return renderCatalog(); }
+  const fq = e.target.closest('[data-film-q]');
+  if (fq) {
+    const f = FEATURED_FILMS[fq.dataset.filmQ];
+    const src = parseInput(f.url, env);
+    src.provider = 'Film'; src.title = `${f.title} (${f.year})`;
+    if (addToQueue(src, src.title, { quiet: true })) toast(`Sıraya eklendi: ${src.title}`, 'success', 2200);
+    return renderCatalog();
+  }
   const film = e.target.closest('[data-film]');
   if (film) {
     const f = FEATURED_FILMS[film.dataset.film];
@@ -1226,6 +1683,7 @@ function openSettings(devices = false) {
   $('#setReactions').checked = S.reactionsOn;
   $('#setNotify').checked = S.chatToasts;
   renderSetColor();
+  renderAppearance();
   $('#settingsDialog').showModal();
   if (devices) $('#devicesSec').scrollIntoView({ block: 'start' });
 }
@@ -1404,7 +1862,9 @@ function sheetAction(act) {
   if (act === 'close') return;
   if (act === 'catalog') return openCatalog();
   if (act === 'invite') return $('#inviteBtn').click();
-  if (act === 'members' || act === 'cams') return switchTab(act);
+  if (act === 'members' || act === 'cams' || act === 'queue') return switchTab(act);
+  if (act === 'countdown') return startCountdown();
+  if (act === 'theme') return toggleTheme();
   if (act === 'player') { sheet.close(); if (!S.stage.controllable) return toast('Hız ve altyazı yalnızca video, YouTube ve Vimeo kaynaklarında kullanılabilir.', 'info'); return togglePop($('#playerPop'), $('#playBtn')); }
   if (act === 'pip') return togglePip();
   if (act === 'screen') return startScreenShare();
@@ -1441,6 +1901,7 @@ function autoRejoin() {
 function bindRoomUI() {
   $('#addressBar').addEventListener('submit', (e) => { e.preventDefault(); openSource($('#urlInput').value); $('#urlInput').blur(); });
   $('#urlInput').addEventListener('input', () => { $('#clearUrl').hidden = !$('#urlInput').value; });
+  $('#urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); const v = $('#urlInput').value.trim(); if (v && addToQueue(v)) { $('#urlInput').value = ''; $('#clearUrl').hidden = true; } } });
   $('#urlInput').addEventListener('focus', () => $('#urlInput').select());
   $('#clearUrl').addEventListener('click', () => { $('#urlInput').value = ''; $('#clearUrl').hidden = true; $('#urlInput').focus(); });
   $('#backBtn').addEventListener('click', () => {
@@ -1466,13 +1927,7 @@ function bindRoomUI() {
   });
 
   $('#codePill').addEventListener('click', () => copyText(S.room.code, 'Oda kodu kopyalandı'));
-  $('#inviteBtn').addEventListener('click', async () => {
-    const link = inviteLink(S.room.code);
-    if (navigator.share && matchMedia('(pointer:coarse)').matches) {
-      try { await navigator.share({ title: 'CineSync odası', text: `Birlikte izleyelim! Oda kodu: ${S.room.code}`, url: link }); return; } catch (e) { if (e?.name === 'AbortError') return; }
-    }
-    copyText(link, 'Davet linki kopyalandı');
-  });
+  $('#inviteBtn').addEventListener('click', openInvite);
   for (const id of ['#micBtn', '#camsMicBtn']) $(id).addEventListener('click', toggleMic);
   for (const id of ['#camBtn', '#camsCamBtn']) $(id).addEventListener('click', toggleCam);
   $('#leaveBtn').addEventListener('click', leaveRoom);
@@ -1524,7 +1979,7 @@ function bindRoomUI() {
   // Tepkiler, hız, altyazı
   $('#emojiPop').addEventListener('click', (e) => { const b = e.target.closest('[data-emoji]'); if (b) sendReaction(b.dataset.emoji); });
   for (const id of ['#emojiBtn', '#fsEmojiBtn', '#fsEmojiFloat']) $(id).addEventListener('click', (e) => { e.stopPropagation(); togglePop($('#emojiPop'), e.currentTarget); });
-  $('#playerSetBtn').addEventListener('click', (e) => { e.stopPropagation(); togglePop($('#playerPop'), e.currentTarget); });
+  $('#playerSetBtn').addEventListener('click', (e) => { e.stopPropagation(); updateSubsTune(); togglePop($('#playerPop'), e.currentTarget); });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.pop, #emojiBtn, #fsEmojiBtn, #fsEmojiFloat, #playerSetBtn')) closePops(); });
   $('#rateSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-rate]'); if (b) setRate(Number(b.dataset.rate)); });
   $('#subsForm').addEventListener('submit', (e) => { e.preventDefault(); setSubsFromUrl($('#subsUrl').value.trim()); });
@@ -1584,6 +2039,7 @@ function bindRoomUI() {
     if (!text || !S.room) return;
     S.room.sendChat(text, S.replyTo);
     $('#chatInput').value = '';
+    $('#mentionList').hidden = true; toggleChatEmoji(false);
     setReply(null);
     S.lastTypingSent = 0;
   });
@@ -1618,6 +2074,90 @@ function bindRoomUI() {
   window.addEventListener('focus', () => { if (S.room && Date.now() - S.hiddenAt > 2000) resumeAudio(); });
   window.addEventListener('online', () => { if (!S.room) return; setNet(S.relays.open, S.relays.total); toast('İnternet bağlantısı geri geldi, yeniden bağlanılıyor…', 'success'); S.room.resume(); setTimeout(() => S.mesh?.heal(), 1500); updateConn(); });
   window.addEventListener('offline', () => { if (!S.room) return; setNet(0, S.relays.total); toast('İnternet bağlantısı koptu. Geri gelince kendiliğinden bağlanılacak.', 'warn', 5000); updateConn(); });
+  // ---- v2.4: ortak sıra
+  $('#queueForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#queueInput').value.trim(); if (!v) return $('#queueInput').focus(); if (addToQueue(v)) $('#queueInput').value = ''; });
+  $('#queueAddBtn').addEventListener('click', () => {
+    const v = $('#urlInput').value.trim() || S.room?.media?.src?.url || '';
+    if (!v) { showQueue(); return toast('Adres çubuğuna bir link yaz ya da “Sıra” sekmesinden ekle.', 'info', 3000); }
+    addToQueue(v, v === S.room?.media?.src?.url ? S.room.media.src.title : undefined);
+  });
+  $('#queueList').addEventListener('click', (e) => {
+    const pl = e.target.closest('[data-qplay]'); if (pl) return playQueueItem(pl.dataset.qplay);
+    const mv = e.target.closest('[data-qmove]'); if (mv) return moveInQueue(mv.dataset.qidBtn, Number(mv.dataset.qmove));
+    const del = e.target.closest('[data-qdel]'); if (del) return removeFromQueue(del.dataset.qdel);
+  });
+  $('#queueList').addEventListener('keydown', (e) => {
+    const li = e.target.closest('li[data-qid]'); if (!li || !e.altKey) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); moveInQueue(li.dataset.qid, e.key === 'ArrowUp' ? -1 : 1); }
+  });
+  $('#queueAuto').addEventListener('change', (e) => { if (!S.room) return; if (!canControl()) { e.target.checked = !e.target.checked; return deny(); } S.room.setQueue({ auto: e.target.checked }); });
+  $('#queueClear').addEventListener('click', () => {
+    if (!S.room || !qItems().length) return;
+    if (!canControl()) return deny();
+    const before = S.room.queue;
+    S.room.setQueue({ items: [], cur: null });
+    toast('Sıra temizlendi.', 'info', 4000, { action: { label: 'Geri al', fn: () => S.room?.setQueue({ items: before.items, cur: before.cur }) } });
+  });
+  $('#queueEmpty [data-empty=catalog]').addEventListener('click', openCatalog);
+  $('#nextBtn').addEventListener('click', () => queueStep(1));
+  $('#prevBtn').addEventListener('click', () => queueStep(-1));
+  // ---- v2.4: geri sayım
+  $('#countdownBtn').addEventListener('click', startCountdown);
+  $('#cdCancel').addEventListener('click', () => { if (!S.countdown) return; S.room?.send('countdown', { id: S.countdown.id, cancel: true }); cancelCountdown(true); });
+  // ---- v2.4: davet penceresi
+  $('#inviteDialog').addEventListener('click', (e) => { if (e.target === $('#inviteDialog') || e.target.closest('[data-close]')) $('#inviteDialog').close(); });
+  $('#invCopy').addEventListener('click', () => copyText($('#invLink').value, 'Davet linki kopyalandı'));
+  $('#invCode').addEventListener('click', () => copyText(S.room?.code || '', 'Oda kodu kopyalandı'));
+  $('#invLink').addEventListener('focus', (e) => e.target.select());
+  $('#invShare').addEventListener('click', async () => {
+    try { await navigator.share({ title: 'CineSync odası', text: `Birlikte izleyelim! Oda kodu: ${S.room.code}`, url: $('#invLink').value }); }
+    catch (e) { if (e?.name !== 'AbortError') copyText($('#invLink').value, 'Davet linki kopyalandı'); }
+  });
+  // ---- v2.4: kişiler (ses düzeyi, kontrolü devret)
+  $('#memberList').addEventListener('input', (e) => {
+    const r = e.target.closest('[data-vol-id]'); if (!r) return;
+    setPeerVolume(r.dataset.volId, r.value / 100);
+    const out = r.parentElement.querySelector('output'); if (out) out.textContent = `${r.value}%`;
+  });
+  $('#memberList').addEventListener('change', () => S.room && setTimeout(() => renderMembers(S.room.memberList()), 0));
+  $('#memberList').addEventListener('click', (e) => { const b = e.target.closest('[data-handover]'); if (b) handOver(b.dataset.handover); });
+  // ---- v2.4: sohbet tepkileri, @bahsetme, emoji
+  $('#chatList').addEventListener('click', (e) => {
+    const open = e.target.closest('[data-react-open]');
+    if (open) { const m = open.closest('.msg'); if (m.querySelector('.react-pick')) closeReactPicker(); else openReactPicker(m); return; }
+    const pk = e.target.closest('[data-pick]');
+    if (pk) { toggleReact(pk.closest('.msg').dataset.id, pk.dataset.pick); closeReactPicker(); return; }
+    const chip = e.target.closest('[data-react]');
+    if (chip) toggleReact(chip.closest('.msg').dataset.id, chip.dataset.react);
+  });
+  $('#chatList').addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#chatList .react-pick')) { e.stopPropagation(); const m = e.target.closest('.msg'); closeReactPicker(); m?.querySelector('[data-react-open]')?.focus(); } });
+  document.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('.react-pick, [data-react-open]')) closeReactPicker();
+    if (!e.target.closest('#chatEmojiPop, #chatEmojiBtn')) toggleChatEmoji(false);
+    if (!e.target.closest('#mentionList, #chatInput')) $('#mentionList').hidden = true;
+  });
+  $('#chatInput').addEventListener('input', () => { S.mentionIdx = 0; updateMentions(); });
+  $('#chatInput').addEventListener('click', updateMentions);
+  $('#chatInput').addEventListener('keydown', (e) => {
+    const box = $('#mentionList');
+    if (box.hidden || !box._hits?.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); S.mentionIdx = (S.mentionIdx + (e.key === 'ArrowDown' ? 1 : -1) + box._hits.length) % box._hits.length; updateMentions(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); pickMention(S.mentionIdx); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); box.hidden = true; }
+  });
+  $('#mentionList').addEventListener('click', (e) => { const b = e.target.closest('[data-mention]'); if (b) pickMention(Number(b.dataset.mention)); });
+  $('#chatEmojiBtn').addEventListener('click', () => toggleChatEmoji());
+  $('#chatEmojiPop').addEventListener('click', (e) => { const b = e.target.closest('[data-ins]'); if (!b) return; const inp = $('#chatInput'); insertAtCaret(inp, b.dataset.ins); inp.focus(); });
+  // ---- v2.4: altyazı ayarı
+  $('#subsTune').addEventListener('click', (e) => {
+    const sh = e.target.closest('[data-subs-shift]'); if (sh) return shiftSubs(Number(sh.dataset.subsShift));
+    const sz = e.target.closest('[data-subs-size]'); if (sz) return setSubsSize(sz.dataset.subsSize);
+  });
+  setSubsSize(S.subsSize);
+  // ---- v2.4: görünüm
+  $('#themeSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-theme-opt]'); if (b) { setThemePref(b.dataset.themeOpt); renderAppearance(); } });
+  $('#accentPicker').addEventListener('click', (e) => { const b = e.target.closest('[data-accent]'); if (b) { setAccentPref(b.dataset.accent); renderAppearance(); } });
+  onThemeChange((t) => updateThemeLabels(t));
   bindLaser();
   updateSoundLabel();
   toggleCamsHidden(); toggleCamsHidden(); // etiketleri kayıtlı tercihe göre ayarla
@@ -1648,7 +2188,9 @@ function fitViewport() {
 }
 
 function boot() {
+  applyTheme();
   hydrateIcons();
+  updateThemeLabels();
   fitViewport();
   let fitRaf = 0;
   const fit = () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(fitViewport); };
@@ -1664,6 +2206,7 @@ function boot() {
       requestAnimationFrame(() => S.pip && S.pip.layout());
     },
     onBuffer: () => { S.room?.requestSync(); setTimeout(() => driftCheck(true), 400); },
+    onEnded: () => onMediaEnded(),
     onBlockedAction: (act, src) => {
       if (act === 'share-screen') { window.open(src.url, '_blank', 'noopener'); setTimeout(startScreenShare, 400); }
       if (act === 'copy') copyText(src.url, 'Link kopyalandı');
@@ -1695,7 +2238,7 @@ function boot() {
       location.reload();
     });
   }
-  window.CineSync = { S, parseInput, enterFullscreen, exitFullscreen, toggleCamsHidden, openSource, onDeviceChange, driftCheck, leaveRoom, enterRoom }; // hata ayıklama ve testler için
+  window.CineSync = { S, parseInput, enterFullscreen, exitFullscreen, toggleCamsHidden, openSource, onDeviceChange, driftCheck, leaveRoom, enterRoom, addToQueue, queueStep, startCountdown, onMediaEnded, version: APP_VERSION }; // hata ayıklama ve testler için
   autoRejoin();
 }
 

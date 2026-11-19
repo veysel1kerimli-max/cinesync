@@ -1,9 +1,9 @@
 {
   "name": "cinesync",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "CineSync — ortak izleme odası",
   "scripts": {
-    "test": "node tests/url-parser.test.mjs",
+    "test": "node tests/url-parser.test.mjs && node tests/unit-v24.test.mjs",
     "build": "node scripts/build.mjs",
     "serve": "python3 -m http.server 8080"
   },
@@ -16,7 +16,8 @@
     "@noble/hashes": "^2.4.0",
     "esbuild": "^0.28.2",
     "hls.js": "^1.7.4",
-    "playwright-core": "^1.65.1"
+    "playwright-core": "^1.65.1",
+    "qrcode-generator": "^2.0.4"
   },
   "private": true
 }

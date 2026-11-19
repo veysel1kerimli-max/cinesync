@@ -15,7 +15,7 @@ import { HLS_SRC } from './config.js';
 const SUPPRESS_MS = 1200;
 
 export class Stage {
-  constructor(root, { onUserAction, onEngine, onBlockedAction, onBuffer, hlsSrc } = {}) {
+  constructor(root, { onUserAction, onEngine, onBlockedAction, onBuffer, onEnded, hlsSrc } = {}) {
     this.root = root;
     const userAction = onUserAction || (() => {});
     // Tarayıcının kendisi (sekme arka plana alındı, ekran kilitlendi) oynatıcıyı durdurursa bu bir
@@ -28,6 +28,9 @@ export class Stage {
       try { userAction(a); } catch (e) { console.warn('[stage] action', e); }
     };
     this.onBuffer = onBuffer || (() => {});
+    // Video sona erdi (ortak sıradaki bir sonraki kaynağa geçmek için)
+    this.onEnded = (engine) => { try { (onEnded || (() => {}))(engine); } catch (e) { console.warn('[stage] ended', e); } };
+    this.subsOffset = 0; this._subsVtt = ''; this._subsLabel = '';
     this._loadSeq = 0;
     this.nudge = 1;
     this.onEngine = onEngine || (() => {});
@@ -98,6 +101,7 @@ export class Stage {
     v.addEventListener('play', () => emit('play'));
     v.addEventListener('pause', () => { if (!v.ended) emit('pause'); });
     v.addEventListener('seeked', () => emit('seek'));
+    v.addEventListener('ended', () => { if (this.engine === 'video') this.onEnded('video'); });
     v.addEventListener('error', () => {
       if (this.engine === 'video') this._showError('Video yüklenemedi. Bağlantı geçersiz olabilir, sunucu erişimi kısıtlıyor olabilir veya biçim tarayıcınızca desteklenmiyor.');
     });
@@ -177,6 +181,7 @@ export class Stage {
           onStateChange: (e) => {
             if (this._suppressed() || this.engine !== 'youtube') return;
             const S = window.YT.PlayerState;
+            if (e.data === S.ENDED) { this.onEnded('youtube'); return; }
             if (e.data === S.PLAYING) this.onUserAction({ type: 'play', playing: true, time: this.getTime() });
             else if (e.data === S.PAUSED) this.onUserAction({ type: 'pause', playing: false, time: this.getTime() });
           },
@@ -208,6 +213,7 @@ export class Stage {
       p.on('play', (d) => { this.vimeoState.paused = false; if (live()) this.onUserAction({ type: 'play', playing: true, time: d.seconds }); });
       p.on('pause', (d) => { this.vimeoState.paused = true; if (live()) this.onUserAction({ type: 'pause', playing: false, time: d.seconds }); });
       p.on('seeked', (d) => { this.vimeoState.time = d.seconds; if (live()) this.onUserAction({ type: 'seek', playing: !this.vimeoState.paused, time: d.seconds }); });
+      p.on('ended', () => { if (this.engine === 'vimeo' && this.vimeo === p) this.onEnded('vimeo'); });
       p.on('error', () => {});
       await p.ready();
       this.vimeoState.duration = await p.getDuration().catch(() => 0);
@@ -404,9 +410,8 @@ export class Stage {
 
   /** Altyazı (.vtt / .srt). text verilirse doğrudan kullanılır; url verilirse indirilir (CORS gerekir). */
   async setSubtitles({ url, text, label = 'Altyazı' } = {}) {
-    const v = this.video;
-    v.querySelectorAll('track').forEach((t) => t.remove());
-    if (this.subsUrl) { URL.revokeObjectURL(this.subsUrl); this.subsUrl = null; }
+    this._subsVtt = ''; this.subsOffset = 0;
+    this._clearTrack();
     if (!url && !text) return true;
     let body = text;
     if (!body) {
@@ -414,13 +419,35 @@ export class Stage {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       body = await res.text();
     }
-    const vtt = toVtt(body);
+    this._subsVtt = toVtt(body); this._subsLabel = label;
+    this._mountTrack();
+    return true;
+  }
+
+  get hasSubtitles() { return !!this._subsVtt; }
+
+  /** Altyazıyı ileri/geri kaydırır (sn). Görüntü ile konuşma uyuşmuyorsa kullanılır; yalnızca bu cihazda. */
+  setSubtitleOffset(sec) {
+    this.subsOffset = Math.max(-600, Math.min(600, Math.round((Number(sec) || 0) * 10) / 10));
+    if (this._subsVtt) this._mountTrack();
+    return this.subsOffset;
+  }
+
+  _clearTrack() {
+    const v = this.video;
+    v.querySelectorAll('track').forEach((t) => t.remove());
+    if (this.subsUrl) { URL.revokeObjectURL(this.subsUrl); this.subsUrl = null; }
+  }
+
+  _mountTrack() {
+    const v = this.video;
+    this._clearTrack();
+    const vtt = this.subsOffset ? shiftVtt(this._subsVtt, this.subsOffset) : this._subsVtt;
     this.subsUrl = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
     const tr = document.createElement('track');
-    tr.kind = 'subtitles'; tr.label = label; tr.srclang = 'tr'; tr.src = this.subsUrl; tr.default = true;
+    tr.kind = 'subtitles'; tr.label = this._subsLabel || 'Altyazı'; tr.srclang = 'tr'; tr.src = this.subsUrl; tr.default = true;
     v.appendChild(tr);
-    setTimeout(() => { if (v.textTracks[0]) v.textTracks[0].mode = 'showing'; }, 50);
-    return true;
+    setTimeout(() => { const t = v.textTracks[v.textTracks.length - 1]; if (t) t.mode = 'showing'; }, 50);
   }
 
   setVolume(vol, muted) {
@@ -458,4 +485,19 @@ export function toVtt(text) {
   const body = t.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{1,3})/g, (_, a, ms) => `${a.padStart(8, '0')}.${ms.padEnd(3, '0')}`)
     .replace(/^\d+\n(?=\d{2}:\d{2})/gm, '');
   return 'WEBVTT\n\n' + body + '\n';
+}
+
+const tsToSec = (h, m, sec, ms) => (Number(h) || 0) * 3600 + Number(m) * 60 + Number(sec) + Number(ms) / 1000;
+function secToTs(t) {
+  const v = Math.max(0, t);
+  const h = Math.floor(v / 3600), m = Math.floor((v % 3600) / 60), s = Math.floor(v % 60), ms = Math.round((v - Math.floor(v)) * 1000);
+  const p = (n, l = 2) => String(n).padStart(l, '0');
+  return `${p(h)}:${p(m)}:${p(s)}.${p(ms >= 1000 ? 999 : ms, 3)}`;
+}
+/** WebVTT içindeki tüm zaman damgalarını "sec" saniye kaydırır (negatif = erken). 0'ın altına düşenler 0'da kalır. */
+export function shiftVtt(vtt, sec) {
+  const d = Number(sec) || 0;
+  if (!d) return vtt;
+  return String(vtt).replace(/(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})(\s+-->\s+)(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})/g,
+    (_, h1, m1, s1, ms1, arrow, h2, m2, s2, ms2) => `${secToTs(tsToSec(h1, m1, s1, ms1) + d)}${arrow}${secToTs(tsToSec(h2, m2, s2, ms2) + d)}`);
 }

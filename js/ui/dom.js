@@ -20,16 +20,53 @@ export function clockTime(ts = Date.now()) {
 }
 
 const TOAST_ICON = { info: 'info', success: 'check', warn: 'alert', error: 'alert' };
-export function toast(message, type = 'info', ms = 3600) {
+/**
+ * Kısa bildirim. Dokununca kapanır; aynı anda en fazla 4 tane görünür (en eskisi kapanır).
+ * opts.action = { label, fn } verilirse bildirimde bir işlem düğmesi (ör. "Geri al") gösterilir.
+ */
+export function toast(message, type = 'info', ms = 3600, opts = {}) {
   const host = $('#toasts');
   if (!host) return;
+  // Aynı metin zaten görünüyorsa yenisini ekleme, süresini uzat
+  for (const t of host.children) if (t._msg === message && !t.classList.contains('out')) { clearTimeout(t._timer); t._timer = setTimeout(() => close(t), ms); return t; }
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
+  el._msg = message;
   el.setAttribute('role', type === 'error' ? 'alert' : 'status');
-  el.innerHTML = `${icon(TOAST_ICON[type] || 'info')}<span>${escapeHtml(message)}</span>`;
+  el.innerHTML = `${icon(TOAST_ICON[type] || 'info')}<span class="toast-text">${escapeHtml(message)}</span>`;
+  if (opts.action && typeof opts.action.fn === 'function') {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'toast-act'; b.textContent = opts.action.label || 'Tamam';
+    b.addEventListener('click', (e) => { e.stopPropagation(); try { opts.action.fn(); } catch {} close(el); });
+    el.appendChild(b);
+  }
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'toast-x'; x.setAttribute('aria-label', 'Bildirimi kapat'); x.innerHTML = icon('x');
+  x.addEventListener('click', (e) => { e.stopPropagation(); close(el); });
+  el.appendChild(x);
+  el.addEventListener('click', () => close(el));
   host.appendChild(el);
+  const live = [...host.children].filter((t) => !t.classList.contains('out'));
+  while (live.length > 4) close(live.shift());
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
+  el._timer = setTimeout(() => close(el), ms);
+  return el;
+  function close(t) {
+    if (!t || t.classList.contains('out')) return;
+    clearTimeout(t._timer);
+    t.classList.add('out'); t.classList.remove('show');
+    setTimeout(() => t.remove(), 300);
+  }
+}
+
+/** Göreli zaman: "az önce", "5 dk önce", "2 sa önce", "3 gün önce" */
+export function timeAgo(ts, now = Date.now()) {
+  const d = Math.max(0, now - Number(ts || 0)) / 1000;
+  if (d < 60) return 'az önce';
+  if (d < 3600) return `${Math.floor(d / 60)} dk önce`;
+  if (d < 86400) return `${Math.floor(d / 3600)} sa önce`;
+  if (d < 86400 * 30) return `${Math.floor(d / 86400)} gün önce`;
+  return new Date(ts).toLocaleDateString('tr-TR');
 }
 
 export async function copyText(text, okMsg = 'Panoya kopyalandı') {

@@ -1,4 +1,4 @@
-# CineSync v2.3 — Ortak İzleme Odası
+# CineSync v2.4 — Ortak İzleme Odası
 
 Canlı: https://cinesync-veysel.netlify.app · GitHub Pages: https://veysel1kerimli-max.github.io/cinesync/
 
@@ -25,6 +25,20 @@ Sunucu, hesap veya API anahtarı gerektirmez; statik bir web sitesi olarak her y
 |---|---|---|---|
 | <img src="docs/screenshots/10-mobil-ana-sayfa.png" width="200"> | <img src="docs/screenshots/07-mobil-oda.png" width="200"> | <img src="docs/screenshots/08-mobil-ozel-kod.png" width="200"> | <img src="docs/screenshots/09-mobil-menu.png" width="200"> |
 
+**v2.4 yenilikleri**
+
+| İzleme sırası | Davet: QR kod ve paylaşım |
+|---|---|
+| ![İzleme sırası](docs/screenshots/11-izleme-sirasi.png) | ![Davet QR](docs/screenshots/12-davet-qr.png) |
+| **Ortak geri sayım** | **Sohbette @bahsetme ve tepkiler** |
+| ![Geri sayım](docs/screenshots/13-geri-sayim.png) | ![Sohbet tepkileri](docs/screenshots/14-sohbet-tepkileri.png) |
+| **Açık tema + turkuaz vurgu** | **Kişiler: kontrolü devretme, kişi başı ses** |
+| ![Açık tema](docs/screenshots/15-acik-tema.png) | ![Kişiler](docs/screenshots/18-kisiler-host.png) |
+
+| Mobilde sıra | Yenilikler penceresi |
+|---|---|
+| <img src="docs/screenshots/16-mobil-sira.png" width="200"> | <img src="docs/screenshots/17-yenilikler.png" width="420"> |
+
 ## Özellikler
 
 | Özellik | Açıklama |
@@ -36,8 +50,52 @@ Sunucu, hesap veya API anahtarı gerektirmez; statik bir web sitesi olarak her y
 | Ekran / sekme yansıtma | Korumalı siteler (Netflix, Google vb.) dahil her şeyi canlı paylaşma (WebRTC) |
 | Görüntülü görüşme | Kamera + mikrofon, kişiden kişiye (WebRTC mesh), STUN; TURN eklenebilir |
 | Sohbet | Uçtan uca şifreli, link algılama, okunmamış sayacı, sonradan katılana son 40 mesaj |
-| Eğlence | Uçan emoji tepkileri, ortak lazer işaretçi |
-| Arayüz | Türkçe, koyu tema, satır içi SVG ikonlar (harici font/CDN yok) |
+| İzleme sırası (v2.4) | Odada ortak oynatma listesi: link ekle, sırala, sil; bitince otomatik sıradakine geçiş; ⏮/⏭ düğmeleri |
+| Geri sayım (v2.4) | “3-2-1” ortak geri sayım; herkesin ekranında aynı anda biter ve video başlar, iptal edilebilir |
+| Davet (v2.4) | QR kod, tek tıkla kopyala, WhatsApp / Telegram / e-posta ve telefonun paylaş menüsü |
+| Eğlence | Uçan emoji tepkileri, ortak lazer işaretçi, sohbet mesajlarına emoji tepkisi (v2.4) |
+| Arayüz | Türkçe, **koyu / açık / sistem teması** ve 6 vurgu rengi (v2.4), satır içi SVG ikonlar (harici font/CDN yok) |
+
+## v2.4'te yenilenenler
+
+### Yeni özellikler
+
+- **İzleme sırası (Sıra sekmesi):** Odadaki herkes sıraya YouTube, Vimeo, MP4, HLS linki ya da katalogdaki filmi (kart üzerindeki **+**) ekleyebilir.
+  YouTube/Vimeo başlıkları otomatik alınır. Öğeler yukarı/aşağı taşınabilir, silinebilir, “Geri al” ile geri alınabilir.
+  *Bitince sıradakine geç* açıksa video bitince oda kendiliğinden sıradakine geçer (aynı anda tek kişi tetikler, çift atlama olmaz).
+  Kontrol kilitliyse sırayı yalnızca yönetici değiştirebilir. Adres çubuğunda **Shift+Enter** linki sıraya ekler.
+- **Ortak geri sayım:** ⏱ düğmesi (veya **G**) herkesin ekranında aynı anda biten bir 3-2-1 sayacı başlatır; sıfırda video herkeste birlikte başlar. Tekrar basınca iptal olur.
+- **Davet penceresi:** QR kod (telefon kamerasıyla okut), oda kodu, link kopyalama, WhatsApp / Telegram / e-posta ve cihazın paylaş menüsü. Şifreli odalarda şifrenin ayrıca söylenmesi gerektiği hatırlatılır.
+- **Sohbet:** `@isim` ile bahsetme (otomatik tamamlama, sana bahsedilince vurgulu mesaj + bildirim), mesajlara emoji tepkisi, emoji seçici.
+- **Kişiler:** yönetici için taç simgesi; kilitli odada kontrolü başka birine **devretme**; her kişinin sesini ayrı ayarlama (isme göre hatırlanır); bağlantı gecikmesi (ms).
+- **Altyazı ayarı:** altyazıyı ±0,5 sn / ±5 sn kaydırma ve küçük / orta / büyük boyut.
+- **Tema:** koyu, açık veya sistem teması; mor, mavi, turkuaz, yeşil, turuncu, pembe vurgu renkleri (Ayarlar → Görünüm, üst çubuktaki ay/güneş düğmesi). Sayfa ilk açılışta yanıp sönmeden doğru temayla gelir.
+- **Son odalar:** ne zaman girildiği (“5 dk önce”), şifreli oda simgesi ve listeden kaldırma.
+- **Bildirimler:** tıklayınca kapanan, aynı mesajı tekrarlamayan, en fazla 4 tane gösterilen, “Geri al” gibi eylem düğmeli bildirimler.
+- **Yenilikler penceresi:** ana sayfadaki “Yeni · v2.4” rozeti.
+
+### Düzeltilen hatalar
+
+- Kişiler listesindeki kaydırıcılar/düğmeler her bağlantı yoklamasında yeniden çizildiği için odak ve sürükleme kayboluyordu; liste artık yalnızca değişen satırı günceller.
+- Odadan çıkıp yeni odaya girince “geri” düğmesi eski geçmişle etkin kalıyordu.
+- **B** kısayolu kamera boyutunu değiştiriyor ama bilgi vermiyordu; artık bildirim gösteriyor.
+- Bir pencere (dialog) açıkken klavye kısayolları arka planda çalışabiliyordu.
+- Uzun isimli sohbet mesajları dar panelde taşabiliyordu.
+
+### Yeni kısayollar
+
+| Tuş | İşlev |
+|---|---|
+| N / P | Sıradaki / önceki video |
+| Q | Sıra sekmesi |
+| G | Geri sayım başlat / iptal |
+| I | Davet penceresi |
+
+### Testler (v2.4)
+
+- `npm test` — link çözümleyici + yeni birim testleri (sıra doğrulama, altyazı kaydırma, QR, göreli zaman).
+- `node tests/v24.mjs http://localhost:8080/ chromium|firefox|webkit` — iki kullanıcıyla sıra, otomatik geçiş, geri sayım, davet/QR, @bahsetme, tepkiler, devretme, tema (51 kontrol).
+- `node tests/v24-mobile.mjs http://localhost:8080/ chromium|firefox|webkit` — 320×568'den 1920×1080'e yeni panellerde yatay taşma kontrolü (67 kontrol, görüntüler `tests/shots/v24/`).
 
 ## v2.3'te yenilenenler
 
@@ -116,6 +174,10 @@ Telefonda sesin **kulaklıktan mı hoparlörden mi** geleceğine tarayıcı değ
 | / | Adres çubuğu |
 | Enter | Sohbete yaz |
 | Ctrl+D / Ctrl+E | Mikrofon / kamera |
+| N / P | Sıradaki / önceki video (v2.4) |
+| Q | Sıra sekmesi (v2.4) |
+| G | Geri sayım (v2.4) |
+| I | Davet / QR (v2.4) |
 | ? | Yardım |
 | Esc | Menü / paneli kapat, sahte tam ekrandan çık |
 
@@ -254,6 +316,9 @@ js/rtc.js             WebRTC görüntülü görüşme (perfect negotiation, ICE 
 js/stage.js           Oynatıcı motorları (HTML5/HLS, YouTube, Vimeo, iframe, engelli kartı, yansıtma)
 js/app.js             Arayüz bağlantıları, tam ekran, kısayollar
 js/pip.js             Tam ekranda yüzen kamera kutucukları
+js/theme.js           Koyu/açık tema ve vurgu renkleri (v2.4)
+js/qr.js              Davet QR kodu (v2.4)
+js/vendor/qrcode.js   qrcode-generator (MIT) — QR kod üretimi
 manifest.webmanifest, sw.js, icons/  PWA dosyaları
 js/ui/*.js            DOM yardımcıları ve SVG ikonlar
 js/vendor/schnorr.js  noble-curves (MIT) — Nostr imzası için
@@ -283,11 +348,11 @@ Geliştirme: `npm install` → `npm test` (link testleri) → `npm run build` (t
 
 ## Lisanslar
 
-CineSync kodu: MIT. Dahil edilen kütüphaneler: noble-curves (MIT), hls.js (Apache-2.0). İkon çizimleri Lucide (ISC) tarzındadır.
+CineSync kodu: MIT. Dahil edilen kütüphaneler: noble-curves (MIT), hls.js (Apache-2.0), qrcode-generator (MIT). İkon çizimleri Lucide (ISC) tarzındadır.
 
 ## Lisans
 
 Telif Hakkı © 2026 Veysel Kerimli. **Tüm hakları saklıdır.**
 
-Bu proje tescilli bir yazılımdır ve yalnızca incelenmek amacıyla herkese açıktır. Yazılı izin olmadan kopyalanması, değiştirilmesi, yeniden yayınlanması, başka bir yerde barındırılması ve **her türlü ticari kullanımı yasaktır**. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın. Üçüncü taraf bileşenler (hls.js, noble) kendi lisanslarına tabidir.
+Bu proje tescilli bir yazılımdır ve yalnızca incelenmek amacıyla herkese açıktır. Yazılı izin olmadan kopyalanması, değiştirilmesi, yeniden yayınlanması, başka bir yerde barındırılması ve **her türlü ticari kullanımı yasaktır**. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın. Üçüncü taraf bileşenler (hls.js, noble, qrcode-generator) kendi lisanslarına tabidir.
 

@@ -1,9 +1,9 @@
 // CineSync service worker — yalnızca uygulama kabuğunu önbelleğe alır (çevrimdışı açılış + kurulabilirlik).
 // Strateji: önce ağ, ağ yoksa önbellek. Böylece yeni sürüm yayınlandığında hemen görünür.
-const CACHE = 'cinesync-shell-v2.3.0';
+const CACHE = 'cinesync-shell-v2.4.0';
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png',
-  './js/app.js', './js/config.js', './js/url-parser.js', './js/room.js', './js/rtc.js', './js/stage.js', './js/pip.js',
+  './js/app.js', './js/config.js', './js/url-parser.js', './js/room.js', './js/rtc.js', './js/stage.js', './js/pip.js', './js/theme.js', './js/qr.js', './js/vendor/qrcode.js',
   './js/ui/dom.js', './js/ui/icons.js', './js/net/relay-pool.js', './js/net/room-channel.js', './js/vendor/schnorr.js',
 ];
 

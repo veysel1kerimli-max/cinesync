@@ -90,6 +90,7 @@ export class Room {
     this.members = new Map();
     this.chat = [];
     this.media = null; // {ver, byId, byName, label, src, playing, time, refAt, screen}
+    this.queue = null; // ortak izleme sırası: {ver, byId, items:[{id,url,title,provider}], cur, auto}
     this.selfInfo = { mic: false, cam: false, camStreamId: null, screenStreamId: null };
     this.members.set(this.selfId, this._memberRecord({ id: this.selfId, name, color: this.color, joinedAt: this.joinedAt, self: true }));
     this.clock = new Map(); // üye -> {offset (onun saati - benim saatim, ms), rtt, samples[]}
@@ -146,7 +147,7 @@ export class Room {
     this.epoch = ep;
     if (had) {
       // Başka (daha eski) bir oturum varmış: bizim kısa ömürlü durumumuzu bırakıp onunkini al
-      this.media = null; this.chat = [];
+      this.media = null; this.chat = []; this.queue = null;
       this.emit('reset', { reason: 'merge' });
       this._sendPresence('hello');
     }
@@ -159,7 +160,7 @@ export class Room {
     this._lastBeat = Date.now();
     this.joinedAt = Date.now();
     const me = this.members.get(this.selfId); if (me) me.joinedAt = this.joinedAt;
-    this.epoch = null; this.media = null; this.chat = []; this.clock.clear();
+    this.epoch = null; this.media = null; this.chat = []; this.queue = null; this.clock.clear();
     for (const id of Array.from(this.members.keys())) if (id !== this.selfId) this._removeMember(id);
     this.emit('reset', { reason: 'stale' });
     this._sendPresence('hello');
@@ -356,7 +357,68 @@ export class Room {
     this.channel.send('tick', { ver: this.media.ver, time, at: Date.now(), playing: !!this.media.playing }, to).catch(() => {});
   }
 
+  // ---------- Ortak izleme sırası (playlist) ----------
+  // Sıra, oynatma durumundan ayrı sürümlenir: son yazan kazanır (sürüm, eşitlikte üye kimliği).
+  // Kontrol kilitliyse yalnızca oda sahibinin değişiklikleri kabul edilir.
+
+  static cleanQueue(q) {
+    if (!q || typeof q !== 'object') return null;
+    const items = (Array.isArray(q.items) ? q.items : []).slice(0, 50).filter((it) => it && typeof it.url === 'string' && /^https?:\/\//i.test(it.url) && it.url.length <= 2000)
+      .map((it) => ({ id: String(it.id || randomId(8)).slice(0, 16), url: it.url, title: String(it.title || '').slice(0, 120), provider: String(it.provider || '').slice(0, 40), by: String(it.by || '').slice(0, 24) }));
+    const cur = items.some((it) => it.id === q.cur) ? q.cur : null;
+    return { ver: Number(q.ver) || 0, byId: String(q.byId || ''), items, cur, auto: q.auto !== false };
+  }
+
+  setQueue(partial) {
+    if (!this.channel || this.left) return;
+    if (!this.epoch) this._found();
+    const base = this.queue || { items: [], cur: null, auto: true };
+    const next = Room.cleanQueue({ ...base, ...partial, ver: (this.queue?.ver || 0) + 1, byId: this.selfId });
+    this.queue = next;
+    this.channel.send('queue', next).catch(() => {});
+    this.emit('queue', next, { local: true });
+  }
+
+  _acceptQueue(data, fromSnapshot) {
+    const q = Room.cleanQueue(data);
+    if (!q) return false;
+    const cur = this.queue;
+    const newer = !cur || q.ver > cur.ver || (q.ver === cur.ver && q.byId > cur.byId);
+    if (!newer) return false;
+    const md = this.media;
+    if (!fromSnapshot && md && md.locked && md.hostId && q.byId !== md.hostId && this.members.has(md.hostId)) return false;
+    this.queue = q;
+    this.emit('queue', q, { local: false });
+    return true;
+  }
+
   // ---------- Sohbet & olaylar ----------
+
+  /** Bir sohbet mesajına emoji tepkisi ekler/kaldırır (herkeste aynı sayılır) */
+  reactChat(id, e, on) {
+    const ok = this._applyReact(id, e, this.selfId, on);
+    if (ok && this.channel && !this.left) this.channel.send('chatreact', { id, e, on: !!on }).catch(() => {});
+    return ok;
+  }
+
+  _onChatReact(data, from) {
+    if (!data || typeof data.id !== 'string') return;
+    this._applyReact(data.id, data.e, from, !!data.on);
+  }
+
+  _applyReact(id, e, who, on) {
+    if (typeof e !== 'string' || e.length > 8 || !/^\p{Extended_Pictographic}/u.test(e)) return false;
+    const msg = this.chat.find((m) => m.id === id);
+    if (!msg) return false;
+    const r = (msg.reacts ||= {});
+    const set = new Set(Array.isArray(r[e]) ? r[e] : []);
+    if (on) set.add(who); else set.delete(who);
+    if (set.size) r[e] = [...set].slice(0, 100); else delete r[e];
+    if (Object.keys(r).length > 12) return false;
+    this.emit('chat-react', msg);
+    return true;
+  }
+
 
   sendChat(text, reply) {
     const msg = { id: randomId(8), fromId: this.selfId, name: this.name, text: String(text).slice(0, 1000), ts: Date.now() };
@@ -377,6 +439,11 @@ export class Room {
 
   _pushChat(msg) {
     if (this.chat.some((m) => m.id === msg.id)) return;
+    if (msg.reacts && typeof msg.reacts === 'object') {
+      const clean = {};
+      for (const [e, ids] of Object.entries(msg.reacts).slice(0, 12)) if (typeof e === 'string' && e.length <= 8 && /^\p{Extended_Pictographic}/u.test(e) && Array.isArray(ids)) clean[e] = ids.filter((x) => typeof x === 'string').slice(0, 100);
+      msg.reacts = clean;
+    } else delete msg.reacts;
     this.chat.push(msg);
     this.chat.sort((a, b) => a.ts - b.ts);
     if (this.chat.length > CHAT_KEEP) this.chat.shift();
@@ -431,7 +498,7 @@ export class Room {
         this._upsertMember(from, data);
         this._sendPresence('presence', from);
         if (this._isOldestExcept(from)) {
-          this.channel.send('snapshot', { media: this.mediaSnapshot(), chat: this.chat.slice(-40) }, from);
+          this.channel.send('snapshot', { media: this.mediaSnapshot(), chat: this.chat.slice(-40), queue: this.queue }, from);
         }
         break;
       }
@@ -440,6 +507,7 @@ export class Room {
       case 'snapshot':
         if (ep && ep !== this.epoch) break;
         if (data.media) this._acceptMedia(data.media, true, from);
+        if (data.queue) this._acceptQueue(data.queue, true);
         (Array.isArray(data.chat) ? data.chat : []).forEach((m) => m && typeof m.text === 'string' && this._pushChat(m));
         break;
       case 'media':
@@ -452,6 +520,8 @@ export class Room {
           this.emit('tick', this.positionNow());
         }
         break;
+      case 'queue': this._acceptQueue(data, false); break;
+      case 'chatreact': this._onChatReact(data, from); break;
       case 'chat':
         if (!data || typeof data.text !== 'string') break;
         if (data.reply && typeof data.reply !== 'object') delete data.reply;
